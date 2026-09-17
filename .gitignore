@@ -11,6 +11,10 @@ node_modules/
 .next/
 out/
 next-env.d.ts
+*.tsbuildinfo
+
+# Claude Code local state
+.claude/
 
 # Env files
 .env

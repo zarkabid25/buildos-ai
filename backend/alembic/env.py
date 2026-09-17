@@ -7,7 +7,7 @@ from app.core.config import get_settings
 from app.db.base_class import Base
 
 # Import all models here so Alembic autogenerate can see them.
-# from app.models import ...  # noqa: E402
+from app import models  # noqa: E402,F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)

@@ -7,9 +7,9 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [x] BUILD-002 Configure PostgreSQL
 - [x] BUILD-003 Configure FastAPI
 - [x] BUILD-004 Configure Next.js
-- [ ] BUILD-005 Authentication
-- [ ] BUILD-006 RBAC
-- [ ] BUILD-007 Company management
+- [x] BUILD-005 Authentication
+- [x] BUILD-006 RBAC
+- [x] BUILD-007 Company management
 
 ## Epic 2 — Dashboard
 - [ ] BUILD-008 Executive Dashboard
