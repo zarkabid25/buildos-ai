@@ -24,10 +24,10 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [x] BUILD-015 Project tasks
 
 ## Epic 4 — BOQ
-- [ ] BUILD-016 BOQ management
-- [ ] BUILD-017 BOQ calculations
+- [x] BUILD-016 BOQ management
+- [x] BUILD-017 BOQ calculations
 - [ ] BUILD-018 BOQ vs Actual
-- [ ] BUILD-019 AI BOQ assistant
+- [x] BUILD-019 AI BOQ assistant
 
 ## Epic 5 — Inventory
 - [ ] BUILD-020 Material categories

@@ -94,3 +94,30 @@ CLAUDE.md's rule against inventing data applies to more than AI output — a har
 - BUILD-017 BOQ calculations (quantity × rate = amount, category totals)
 - BUILD-018 BOQ vs Actual (estimated/committed/consumed/remaining/variance — mostly stubbed until procurement/inventory exist)
 - BUILD-019 AI BOQ assistant (flagged as an estimate requiring professional review, per CLAUDE.md rule 13)
+
+---
+
+## Day 5 — 2026-09-21 — BOQ management + AI BOQ assistant
+
+### Done
+- **BUILD-016** BOQ management: `BoqItem` model (item code, description, category, unit, quantity, rate), `boq_service` (list/create/bulk-create/update/delete, all tenant + project scoped), nested `/api/v1/projects/{id}/boq` endpoints, Alembic migration `0004`. CSV import from the spec is deferred — noted as a gap below rather than silently dropped.
+- **BUILD-017** BOQ calculations: `amount` is a computed property (`quantity × rate`) on the model rather than a stored column, so it can never drift out of sync; `GET /boq/summary` returns total amount plus per-category subtotals.
+- **BUILD-019** AI BOQ assistant: `POST /boq/ai-generate` returns a **draft only** (nothing written to the DB) built from a small rule-of-thumb starter template (cement/steel/sand/bricks/labor/excavation quantities for a generic residential build); `POST /boq/ai-accept` is the separate, explicit call that actually creates the items, following CLAUDE.md's "AI never writes directly" rule. The response always carries a disclaimer that the numbers are estimates needing professional review (rule 13). Frontend shows the draft in a distinct highlighted card with "Add all N items" / "Discard" before anything touches the real BOQ table.
+
+### Important honesty note on BUILD-019
+This is **not** a live LLM call. The real AI infrastructure (LLM service, prompt management, structured outputs) is Epic-11-in-the-original-plan work that hasn't been built yet — this environment also has no verified network path to an LLM API to test against. `generate_starter_boq()` is a small deterministic Python template, clearly commented as a placeholder in `boq_service.py`. It satisfies the ticket's UI/workflow contract (draft → review → accept) honestly, but the actual "intelligence" is still ahead of us. Flagging this explicitly so it doesn't get mistaken for working AI later.
+
+### Deferred from BUILD-016
+CSV import for BOQ items wasn't built today — cut to keep the day scoped, tracked as a gap rather than silently skipped. Can be added later as a thin endpoint that parses CSV into the existing `bulk_create_items` service function.
+
+### Verified end-to-end
+- Backend: fresh venv install, then a real run against in-memory SQLite: created two BOQ items, confirmed `amount` math (1,200 bags × 1,400 = 1,680,000), confirmed category subtotal (1,680,000 + 12,600,000 = 14,280,000 for "Materials"), generated the 8-item AI draft, accepted it and confirmed all 8 came back flagged `is_ai_generated=True`, deleted an item and confirmed the count dropped correctly, and confirmed cross-tenant BOQ access is rejected (404).
+- `/openapi.json` confirms all 5 BOQ routes register correctly, including the `/summary` vs `/{item_id}` and `/ai-generate`/`/ai-accept` vs `/{item_id}` ordering (no literal-vs-variable path collisions).
+- Frontend: `tsc --noEmit` clean, `next build` succeeds for all routes; new BOQ tab on the project detail page (add-item form, item table with amounts, AI-generate button with a review-before-accept draft card).
+- Still not run against live Postgres/Docker in this environment.
+
+### Next (Day 6 — Inventory foundation)
+- BUILD-020 Material categories
+- BUILD-021 Material CRUD
+- BUILD-022 Warehouse CRUD
+- BUILD-023 Inventory stock (start of the Project → BOQ → Procurement → Inventory workflow the spec calls the "killer workflow")
