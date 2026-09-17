@@ -13,15 +13,15 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 
 ## Epic 2 — Dashboard
 - [x] BUILD-008 Executive Dashboard
-- [ ] BUILD-009 Project health widget
+- [x] BUILD-009 Project health widget
 - [ ] BUILD-010 AI executive summary
 
 ## Epic 3 — Projects
 - [x] BUILD-011 Project CRUD
 - [x] BUILD-012 Project dashboard
-- [ ] BUILD-013 Project members
-- [ ] BUILD-014 Project milestones
-- [ ] BUILD-015 Project tasks
+- [x] BUILD-013 Project members
+- [x] BUILD-014 Project milestones
+- [x] BUILD-015 Project tasks
 
 ## Epic 4 — BOQ
 - [ ] BUILD-016 BOQ management

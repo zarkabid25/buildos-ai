@@ -53,3 +53,18 @@ class ProjectSummary(BaseModel):
     total_budget: Decimal
     avg_progress: float
     at_risk_count: int
+
+
+class ProjectHealth(BaseModel):
+    """Scores are 0-100 where data exists, null where the source module (cost
+    tracking, inventory, daily reports, etc.) isn't built yet — see Epic 17."""
+
+    overall_score: int | None
+    schedule_score: int | None
+    cost_score: int | None
+    inventory_score: int | None
+    quality_score: int | None
+    safety_score: int | None
+    labor_score: int | None
+    procurement_score: int | None
+    is_at_risk: bool

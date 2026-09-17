@@ -68,3 +68,29 @@ Format per day: what shipped, tickets closed, what's next. See `docs/tickets.md`
 - BUILD-014 Project milestones
 - BUILD-015 Project tasks (CRUD, assignment, priority, status, due date)
 - BUILD-009 Project health widget (turn the at-risk heuristic into a visible score)
+
+---
+
+## Day 4 — 2026-09-20 — Tasks, milestones, members, health score
+
+### Done
+- **BUILD-013** Project members: `ProjectMember` model (unique per project+user), tenant-checked add/remove/list via `project_member_service`, nested `/api/v1/projects/{project_id}/members` endpoints. Members panel on the project detail page.
+- **BUILD-014** Project milestones: `Milestone` model, CRUD-lite service (create/list/update — checking a milestone complete auto-stamps `completed_date` if not supplied), nested `/milestones` endpoints, inline add + checkbox-toggle UI.
+- **BUILD-015** Project tasks: `Task` model (title/description/assignee/priority/status/due date, `TaskStatus`/`TaskPriority` enums), nested `/tasks` endpoints (any project member can move status; create/delete restricted to PM+), inline add + status-dropdown UI.
+- **BUILD-009** Project health widget: `GET /projects/{id}/health` returns per-dimension scores (schedule, cost, inventory, quality, safety, labor, procurement) matching the 7-bar health widget in the product spec. Only `schedule_score` is populated for now — it's derived from the same elapsed-time-vs-progress variance as the Day 3 at-risk heuristic. The other six stay `null` ("no data") rather than showing fabricated numbers, because their source modules (expenses, inventory, daily reports, attendance...) don't exist yet. Frontend renders all 7 as bars, with null ones visibly empty and labeled "no data" instead of silently faked.
+- Alembic migration `0003_project_members_milestones_tasks`.
+
+### Why null instead of a fake number
+CLAUDE.md's rule against inventing data applies to more than AI output — a hardcoded "72%" cost-health bar with no expense data behind it would be just as misleading as an AI hallucination. Kept the honesty even though a full 7-bar chart looks more finished with all bars filled.
+
+### Verified end-to-end
+- Backend: fresh venv install, then a real run against in-memory SQLite covering: create an active project with a 100-day schedule at day 50 / 20% progress → health score correctly shows `schedule_score=40, is_at_risk=True`; task create + status update; milestone create + complete (auto-stamps today's date); project member add; **and two tenant-isolation checks** — adding a user from a different company as a project member is correctly rejected (404), and fetching another company's project by ID is correctly rejected (404).
+- `/openapi.json` confirms all 16 routes register with the expected nested paths.
+- Frontend: `tsc --noEmit` clean, `next build` succeeds for all routes.
+- Still not run against live Postgres/Docker in this environment — run `docker compose up --build` yourself to confirm on real infra.
+
+### Next (Day 5 — BOQ)
+- BUILD-016 BOQ management (create BOQ, add/edit/delete items, CSV import)
+- BUILD-017 BOQ calculations (quantity × rate = amount, category totals)
+- BUILD-018 BOQ vs Actual (estimated/committed/consumed/remaining/variance — mostly stubbed until procurement/inventory exist)
+- BUILD-019 AI BOQ assistant (flagged as an estimate requiring professional review, per CLAUDE.md rule 13)

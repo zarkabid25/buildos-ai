@@ -7,7 +7,7 @@ from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.project import ProjectCreate, ProjectRead, ProjectSummary, ProjectUpdate
+from app.schemas.project import ProjectCreate, ProjectHealth, ProjectRead, ProjectSummary, ProjectUpdate
 from app.services import project_service
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -36,6 +36,15 @@ def get_project(
     db: Session = Depends(get_db),
 ) -> ProjectRead:
     return project_service.get_project(db, current_user.company_id, project_id)
+
+
+@router.get("/{project_id}/health", response_model=ProjectHealth)
+def get_project_health(
+    project_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ProjectHealth:
+    return project_service.get_health(db, current_user.company_id, project_id)
 
 
 @router.post("", response_model=ProjectRead, status_code=201)
