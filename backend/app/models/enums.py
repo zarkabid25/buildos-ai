@@ -9,3 +9,11 @@ class UserRole(str, enum.Enum):
     STOREKEEPER = "storekeeper"
     ACCOUNTANT = "accountant"
     VIEWER = "viewer"
+
+
+class ProjectStatus(str, enum.Enum):
+    PLANNING = "planning"
+    ACTIVE = "active"
+    ON_HOLD = "on_hold"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"

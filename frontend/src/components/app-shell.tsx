@@ -1,39 +1,81 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { cn } from "@/lib/utils";
 
+type NavItem = { label: string; href: string | null };
 type NavLink = { label: string; href: string; items?: undefined };
-type NavGroup = { label: string; items: string[]; href?: undefined };
+type NavGroup = { label: string; items: NavItem[]; href?: undefined };
 type NavEntry = NavLink | NavGroup;
 
+// href: null means the module isn't built yet — rendered as a disabled label
+// rather than a dead link, so the sidebar still communicates the full IA.
 const NAV_SECTIONS: NavEntry[] = [
   { label: "AI Command Center", href: "/ai" },
   { label: "Dashboard", href: "/dashboard" },
   {
     label: "Construction",
-    items: ["Projects", "BOQ", "Tasks", "Schedule", "Daily Reports"],
+    items: [
+      { label: "Projects", href: "/projects" },
+      { label: "BOQ", href: null },
+      { label: "Tasks", href: null },
+      { label: "Schedule", href: null },
+      { label: "Daily Reports", href: null },
+    ],
   },
   {
     label: "Supply Chain",
-    items: ["Inventory", "Warehouses", "Suppliers", "Material Requests", "Purchase Orders"],
+    items: [
+      { label: "Inventory", href: null },
+      { label: "Warehouses", href: null },
+      { label: "Suppliers", href: null },
+      { label: "Material Requests", href: null },
+      { label: "Purchase Orders", href: null },
+    ],
   },
   {
     label: "Cost Control",
-    items: ["Budgets", "Expenses", "Project Costs"],
+    items: [
+      { label: "Budgets", href: null },
+      { label: "Expenses", href: null },
+      { label: "Project Costs", href: null },
+    ],
   },
   {
     label: "Operations",
-    items: ["Workforce", "Equipment"],
+    items: [
+      { label: "Workforce", href: null },
+      { label: "Equipment", href: null },
+    ],
   },
   { label: "Documents", href: "/documents" },
   { label: "AI Insights", href: "/ai-insights" },
 ];
 
+function NavRow({ label, href, active }: { label: string; href: string | null; active: boolean }) {
+  const classes = cn(
+    "block rounded-md px-2 py-1.5 text-sm",
+    active ? "bg-white/10 text-white" : "text-gray-300 hover:bg-white/5 hover:text-white",
+    !href && "cursor-default text-gray-600 hover:bg-transparent hover:text-gray-600"
+  );
+
+  if (!href) {
+    return <div className={classes}>{label}</div>;
+  }
+  return (
+    <Link href={href} className={classes}>
+      {label}
+    </Link>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   function handleLogout() {
     logout();
@@ -52,21 +94,21 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {section.label}
                 </div>
                 {section.items.map((item) => (
-                  <div
-                    key={item}
-                    className="rounded-md px-2 py-1.5 text-sm hover:bg-white/5 hover:text-white"
-                  >
-                    {item}
-                  </div>
+                  <NavRow
+                    key={item.label}
+                    label={item.label}
+                    href={item.href}
+                    active={item.href === pathname}
+                  />
                 ))}
               </div>
             ) : (
-              <div
+              <NavRow
                 key={section.label}
-                className="rounded-md px-2 py-1.5 text-sm font-medium hover:bg-white/5 hover:text-white"
-              >
-                {section.label}
-              </div>
+                label={section.label}
+                href={section.href}
+                active={section.href === pathname}
+              />
             )
           )}
         </nav>

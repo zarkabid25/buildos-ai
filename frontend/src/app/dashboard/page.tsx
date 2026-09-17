@@ -2,12 +2,15 @@
 
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/lib/auth-context";
+import { useProjectSummary } from "@/lib/use-projects";
+import { formatCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 export default function DashboardPage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const { data: summary, isLoading: summaryLoading } = useProjectSummary();
 
   useEffect(() => {
     if (!isLoading && !user) router.replace("/login");
@@ -16,6 +19,13 @@ export default function DashboardPage() {
   if (isLoading || !user) return null;
 
   const firstName = user.full_name.split(" ")[0];
+
+  const stats = [
+    { label: "Projects", value: summary ? String(summary.total_projects) : "—" },
+    { label: "Project Value", value: summary ? formatCurrency(summary.total_budget) : "—" },
+    { label: "Avg Progress", value: summary ? `${summary.avg_progress}%` : "—" },
+    { label: "At Risk", value: summary ? String(summary.at_risk_count) : "—" },
+  ];
 
   return (
     <AppShell>
@@ -26,14 +36,11 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { label: "Projects", value: "0" },
-            { label: "Project Value", value: "PKR 0" },
-            { label: "Avg Progress", value: "0%" },
-            { label: "At Risk", value: "0" },
-          ].map((stat) => (
+          {stats.map((stat) => (
             <div key={stat.label} className="rounded-card border border-border bg-surface p-4">
-              <div className="text-2xl font-semibold text-ink">{stat.value}</div>
+              <div className="text-2xl font-semibold text-ink">
+                {summaryLoading ? "…" : stat.value}
+              </div>
               <div className="text-sm text-muted">{stat.label}</div>
             </div>
           ))}
@@ -42,7 +49,9 @@ export default function DashboardPage() {
         <div className="rounded-card border border-border bg-surface p-5">
           <h2 className="mb-2 text-sm font-semibold text-ink">AI Executive Summary</h2>
           <p className="text-sm text-muted">
-            No data yet. Create your first project to get AI-powered insights here.
+            {summary && summary.total_projects > 0
+              ? `${summary.at_risk_count} of ${summary.total_projects} projects need attention. AI-generated risk explanations arrive with the AI Copilot in a later build.`
+              : "No data yet. Create your first project to get AI-powered insights here."}
           </p>
         </div>
       </div>

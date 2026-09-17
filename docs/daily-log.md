@@ -43,3 +43,28 @@ Format per day: what shipped, tickets closed, what's next. See `docs/tickets.md`
 - BUILD-012 Project dashboard (progress/budget/schedule/health placeholders wired to real data)
 - BUILD-008/009/010 Executive dashboard cards driven by real project counts instead of hardcoded zeros
 - Wire sidebar nav items to actual routes (currently static labels only)
+
+---
+
+## Day 3 — 2026-09-19 — Projects + real dashboard data
+
+### Done
+- **BUILD-011** Project CRUD: `Project` model (tenant-scoped via `TenantBase`, `ProjectStatus` enum: planning/active/on_hold/completed/cancelled), `project_service` (list/get/create/update/delete, duplicate-code guard), `/api/v1/projects` REST endpoints with role-gated writes (PM/Company Admin/Super Admin can write, delete restricted to admins), Alembic migration `0002_projects`.
+- **BUILD-012 / BUILD-008** Project dashboard + executive dashboard: `/projects` list + create form (react-hook-form + zod), `/projects/[id]` detail page with stat cards and a tab strip (Overview live, other tabs stubbed for upcoming epics), dashboard stat cards and AI-summary blurb now driven by a real `GET /projects/summary` endpoint instead of hardcoded zeros.
+- **Risk heuristic (early BUILD-089 groundwork):** `project_service._is_at_risk()` flags an active project as at-risk when elapsed schedule time outpaces reported progress by >15 points — a placeholder ahead of the full risk engine in Epic 17, documented in code as such.
+- Sidebar nav now uses real `next/link` routes with active-state highlighting; unbuilt modules (BOQ, Inventory, etc.) render as disabled labels instead of dead links, so the full IA stays visible without lying about what's clickable.
+
+### Bug found and fixed during verification
+- `passlib[bcrypt]` (added Day 2) is incompatible with modern `bcrypt` releases — passlib probes a `bcrypt.__about__` attribute removed in bcrypt 4.1+, causing every `hash_password`/`verify_password` call to crash at runtime. Confirmed by actually installing the pinned deps in a clean venv and running the app (not just reading the code). Replaced passlib with a direct, small `bcrypt.hashpw`/`checkpw` wrapper in `app/core/security.py`; dropped the `passlib` dependency.
+
+### Verified (this time end-to-end, not just import-checked)
+- Backend: fresh venv install, then a real in-process test against an in-memory SQLite DB exercising the full flow — register → login (correct password accepts, wrong password correctly rejected with 401) → create project → update progress → summary aggregation (total/budget/avg progress/at-risk count all correct).
+- `/api/v1/openapi.json` confirms all routes registered with correct path ordering (`/projects/summary` before `/projects/{project_id}`, otherwise FastAPI would treat "summary" as a project id).
+- Frontend: `tsc --noEmit` clean, `next build` succeeds for all 7 routes including the new `/projects` and dynamic `/projects/[id]`.
+- Still not tested against live Postgres/Docker (unavailable in this dev environment) — run `docker compose up --build` and `alembic upgrade head` to confirm on real infra.
+
+### Next (Day 4 — Tasks, milestones, project members)
+- BUILD-013 Project members (assign users to projects with roles/permissions)
+- BUILD-014 Project milestones
+- BUILD-015 Project tasks (CRUD, assignment, priority, status, due date)
+- BUILD-009 Project health widget (turn the at-risk heuristic into a visible score)
