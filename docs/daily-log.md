@@ -176,6 +176,21 @@ Need at least one automated test that goes through the full HTTP stack (TestClie
 
 ---
 
+## Fix — 2026-09-18 — Frontend never refreshed expired access tokens
+
+### What happened
+Right after the auth bug above was fixed, the user hit a fresh 401 on every request in the browser. This one wasn't a bug in the backend — it was a missing feature in the frontend. Access tokens expire after 60 minutes; the backend has a working `POST /auth/refresh` endpoint (built Day 2), but the frontend fetch client never called it. Once a token expired mid-session, every subsequent request just failed with 401 until the user manually logged out and back in.
+
+### Fix
+- **`frontend/src/lib/auth-store.ts`** (new): a plain module (not a React hook) holding the current access/refresh tokens, so the non-React `api.ts` fetch layer can read the latest refresh token and write a refreshed one back, without threading tokens through every single hook call.
+- **`frontend/src/lib/api.ts`**: on a 401 (and only if the request actually carried a token, and it isn't already a retry, and it isn't the refresh call itself), calls `POST /auth/refresh`, updates the store, and retries the original request once with the new access token. Concurrent 401s (several TanStack Query hooks firing at once, exactly what caused the flood of 401s in the logs) are coalesced into a single in-flight refresh request instead of racing multiple refreshes.
+- **`frontend/src/lib/auth-context.tsx`**: `AuthProvider` registers two callbacks with the store — `onRefreshed` updates React state + localStorage with the new tokens, `onRefreshFailed` (refresh token also expired/invalid) clears the session, which the existing route guards already handle by redirecting to `/login`.
+
+### Verified
+Confirmed the backend's `/auth/refresh` response shape (`access_token`/`refresh_token`/`token_type`) matches exactly what the new frontend code expects, via a direct curl call using a real refresh token. `tsc --noEmit` clean. Did **not** run a separate `next build` against the same `.next` folder the user's live dev server was using this time — learned that lesson from the cache-corruption incident earlier in the day — instead confirmed via the running dev server's own log that Next.js Fast Refresh recompiled all three changed files with zero errors.
+
+---
+
 ### Next (Day 7 — AI inventory intelligence, then Procurement)
 - BUILD-031 Material consumption analytics (daily/weekly/monthly usage rate from the transaction ledger — real math, no AI needed)
 - BUILD-032 Stockout prediction (current stock ÷ consumption rate)

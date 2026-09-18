@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { registerAuthCallbacks, setAuthStoreSession } from "@/lib/auth-store";
 import type { AuthResponse, User } from "@/lib/auth-types";
 
 const STORAGE_KEY = "buildos_auth";
@@ -19,6 +20,19 @@ interface AuthContextValue extends AuthState {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function persist(state: AuthState) {
+  setAuthStoreSession({ accessToken: state.accessToken, refreshToken: state.refreshToken });
+  try {
+    if (state.user) {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } else {
+      window.localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {
+    // ignore corrupt/blocked storage
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ user: null, accessToken: null, refreshToken: null });
   const [isLoading, setIsLoading] = useState(true);
@@ -26,12 +40,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) setState(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw) as AuthState;
+        setState(parsed);
+        setAuthStoreSession({ accessToken: parsed.accessToken, refreshToken: parsed.refreshToken });
+      }
     } catch {
       // ignore corrupt/blocked storage
     } finally {
       setIsLoading(false);
     }
+
+    // Lets the plain (non-React) api.ts fetch layer silently refresh an expired
+    // access token and update this context, or log out if the refresh token is
+    // also invalid -- without every hook having to pass tokens through manually.
+    registerAuthCallbacks({
+      onRefreshed: ({ accessToken, refreshToken }) => {
+        setState((prev) => {
+          const next = { ...prev, accessToken, refreshToken };
+          persist(next);
+          return next;
+        });
+      },
+      onRefreshFailed: () => {
+        const cleared = { user: null, accessToken: null, refreshToken: null };
+        setState(cleared);
+        persist(cleared);
+      },
+    });
   }, []);
 
   function setSession(auth: AuthResponse) {
@@ -41,20 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshToken: auth.refresh_token,
     };
     setState(next);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // ignore
-    }
+    persist(next);
   }
 
   function logout() {
-    setState({ user: null, accessToken: null, refreshToken: null });
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // ignore
-    }
+    const next: AuthState = { user: null, accessToken: null, refreshToken: null };
+    setState(next);
+    persist(next);
   }
 
   return (
