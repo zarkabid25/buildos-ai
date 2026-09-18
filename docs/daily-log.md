@@ -121,3 +121,28 @@ CSV import for BOQ items wasn't built today — cut to keep the day scoped, trac
 - BUILD-021 Material CRUD
 - BUILD-022 Warehouse CRUD
 - BUILD-023 Inventory stock (start of the Project → BOQ → Procurement → Inventory workflow the spec calls the "killer workflow")
+
+---
+
+## Day 6 — 2026-09-22 — Inventory foundation (BUILD-020 through 030)
+
+### Done
+- **BUILD-020/021** Material categories + materials: `MaterialCategory`, `Material` models (SKU unique per company, reorder point), CRUD service + `/api/v1/material-categories` and `/api/v1/materials` endpoints.
+- **BUILD-022** Warehouse CRUD: `Warehouse` model, service, `/api/v1/warehouses` endpoints.
+- **BUILD-023/024/025/026/027/028** Inventory stock, in/out, transfer, allocation, transaction history — all built on one design decision: `InventoryTransaction` is an **append-only ledger**, not a mutable stock-balance table. Current stock on hand is always *derived* by summing signed transaction quantities (`stock_in`/`transfer_in` add, `stock_out`/`transfer_out`/`allocation` subtract) rather than stored and incrementally updated, so a balance can never drift out of sync with its own history — the same reasoning as the BOQ `amount` computed property from Day 5. `stock_out` validates against on-hand quantity and rejects over-withdrawal (400, not a silent negative balance). `transfer` is two linked transactions (`TRANSFER_OUT` + `TRANSFER_IN`) sharing a `transfer_group_id`, validated against the source warehouse's balance. Passing a `project_id` to stock-out records it as `ALLOCATION` instead of a plain `STOCK_OUT`, which is BUILD-027 (project material consumption) — same endpoint, no separate code path needed.
+- **BUILD-029/030** Low-stock alerts + inventory dashboard: `GET /inventory/dashboard` returns total materials, low-stock count, out-of-stock count, warehouse count, matching the spec's dashboard numbers. Reorder point is set per-material (company-wide), and low/out-of-stock is evaluated against the material's *total* on-hand quantity across all warehouses combined, not per-warehouse — a deliberate simplification, noted here in case it surprises anyone reading the code later. What's built is the dashboard indicator, not a push/email notification system (that's Epic 19, not started).
+- Alembic migration `0005_inventory`.
+- Frontend: `/inventory` page — dashboard stat cards, add-material and add-warehouse forms, a stock in/out panel, and a stock-levels table. Sidebar "Inventory" and "Warehouses" links now both route here (single page covers both for the MVP).
+
+### Verified end-to-end
+- Backend: fresh venv install, then a real run against in-memory SQLite: stock in 500 → stock out 120 → confirmed balance 380; attempted to withdraw 99,999 → correctly rejected (400, insufficient stock); transferred 80 units between two warehouses → confirmed both sides balanced correctly (300 / 80); dashboard correctly triggered `low_stock_count=1` for a material at 90/100 reorder point and `out_of_stock_count=1` for a material never stocked, in a dedicated test built specifically to catch a wrong threshold check.
+- One thing I got wrong on the first pass and caught myself: I initially expected the dashboard to report a specific number based on one warehouse's balance, but the code (correctly, by design) aggregates across all warehouses per material. Re-checked the math and confirmed the code was right, not the test expectation — worth recording since it's exactly the kind of assumption mismatch that's easy to ship silently.
+- `/openapi.json` confirms all 11 new routes register correctly.
+- Frontend: `tsc --noEmit` clean, `next build` succeeds for all 8 routes.
+- Still not run against live Postgres/Docker in this environment.
+
+### Next (Day 7 — AI inventory intelligence, then Procurement)
+- BUILD-031 Material consumption analytics (daily/weekly/monthly usage rate from the transaction ledger — real math, no AI needed)
+- BUILD-032 Stockout prediction (current stock ÷ consumption rate)
+- BUILD-033 AI reorder recommendation (same honesty rule as the BOQ assistant — deterministic math dressed as a recommendation, not a real LLM call, until AI infra exists)
+- Start of Epic 8 Procurement (material requests) once inventory intelligence is in place

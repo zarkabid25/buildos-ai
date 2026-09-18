@@ -31,3 +31,11 @@ class TaskPriority(str, enum.Enum):
     MEDIUM = "medium"
     HIGH = "high"
     URGENT = "urgent"
+
+
+class InventoryTransactionType(str, enum.Enum):
+    STOCK_IN = "stock_in"
+    STOCK_OUT = "stock_out"
+    TRANSFER_IN = "transfer_in"
+    TRANSFER_OUT = "transfer_out"
+    ALLOCATION = "allocation"

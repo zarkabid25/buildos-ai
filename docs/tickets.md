@@ -30,17 +30,17 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [x] BUILD-019 AI BOQ assistant
 
 ## Epic 5 — Inventory
-- [ ] BUILD-020 Material categories
-- [ ] BUILD-021 Material CRUD
-- [ ] BUILD-022 Warehouse CRUD
-- [ ] BUILD-023 Inventory stock
-- [ ] BUILD-024 Stock In
-- [ ] BUILD-025 Stock Out
-- [ ] BUILD-026 Warehouse transfer
-- [ ] BUILD-027 Project material allocation
-- [ ] BUILD-028 Inventory transaction history
-- [ ] BUILD-029 Low-stock alerts
-- [ ] BUILD-030 Inventory dashboard
+- [x] BUILD-020 Material categories
+- [x] BUILD-021 Material CRUD
+- [x] BUILD-022 Warehouse CRUD
+- [x] BUILD-023 Inventory stock
+- [x] BUILD-024 Stock In
+- [x] BUILD-025 Stock Out
+- [x] BUILD-026 Warehouse transfer
+- [x] BUILD-027 Project material allocation
+- [x] BUILD-028 Inventory transaction history
+- [x] BUILD-029 Low-stock alerts
+- [x] BUILD-030 Inventory dashboard
 
 ## Epic 6 — AI Inventory
 - [ ] BUILD-031 Material consumption analytics
