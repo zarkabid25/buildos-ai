@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -53,7 +55,12 @@ def refresh(db: Session, refresh_token: str) -> TokenPair:
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
 
-    user = db.query(User).filter(User.id == payload["sub"]).first()
+    try:
+        user_id = uuid.UUID(payload["sub"])
+    except (KeyError, ValueError, TypeError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
+
+    user = db.query(User).filter(User.id == user_id).first()
     if not user or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
 

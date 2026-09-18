@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import Callable
 
 from fastapi import Depends, HTTPException, status
@@ -23,7 +24,12 @@ def get_current_user(
     if not payload or payload.get("type") != "access":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
 
-    user = db.query(User).filter(User.id == payload["sub"]).first()
+    try:
+        user_id = uuid.UUID(payload["sub"])
+    except (KeyError, ValueError, TypeError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
+
+    user = db.query(User).filter(User.id == user_id).first()
     if not user or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
 

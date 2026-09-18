@@ -141,6 +141,41 @@ CSV import for BOQ items wasn't built today — cut to keep the day scoped, trac
 - Frontend: `tsc --noEmit` clean, `next build` succeeds for all 8 routes.
 - Still not run against live Postgres/Docker in this environment.
 
+---
+
+## Fix — 2026-09-18 — Critical auth bug: every authenticated request was broken on SQLite
+
+### What happened
+While setting up a local test run for the user (SQLite dev DB, since no Docker/Postgres password was available in that environment), every single authenticated endpoint returned 500. `GET /materials`, `/warehouses`, `/projects/summary`, even `/auth/me` — anything gated by `get_current_user`.
+
+### Root cause
+`app/api/deps.py` (`get_current_user`) and `app/services/auth_service.py` (`refresh`) both did:
+```python
+db.query(User).filter(User.id == payload["sub"]).first()
+```
+`payload["sub"]` is the JWT subject claim — always a plain **string**. `User.id` is a `postgresql.UUID(as_uuid=True)` column. Against real Postgres, psycopg2 silently coerces a string into the native UUID type, so this works. Against SQLite (no native UUID type), SQLAlchemy's UUID bind processor requires an actual `uuid.UUID` Python object and crashes calling `.hex` on a plain string.
+
+This is exactly the same class of bug as the enum-values fix from earlier today: correct-looking code that only breaks against a specific database backend, invisible to tests that don't exercise the real HTTP+JWT path. My own verification up to this point only ever called service functions directly with real `uuid.UUID` objects (e.g. `owner.company_id`) — I never once drove a request through `get_current_user` itself in an automated test. That's a real gap in the test coverage, not just bad luck.
+
+### Fix
+Both call sites now parse `payload["sub"]` into a real `uuid.UUID` before querying, with a clean 401 (not a 500) if the token's subject is malformed:
+```python
+try:
+    user_id = uuid.UUID(payload["sub"])
+except (KeyError, ValueError, TypeError):
+    raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
+user = db.query(User).filter(User.id == user_id).first()
+```
+This is strictly more correct on Postgres too (explicit conversion instead of relying on driver-level implicit coercion), so it's not a SQLite-only patch.
+
+### Verified
+Restarted the local backend, then drove the exact flow the browser was using: register → `GET /materials` (200), `GET /warehouses` (200), `POST /materials` (201, real row created), `POST /warehouses` (201), login → `GET /projects/summary` (200), `GET /auth/me` (200). Every previously-broken authenticated route now works.
+
+### Lesson for future test coverage
+Need at least one automated test that goes through the full HTTP stack (TestClient + real JWT in the Authorization header), not just direct service-layer calls — added to the Day 7+ backlog as a standing gap, since BUILD-129 (authentication tests) hasn't been done yet.
+
+---
+
 ### Next (Day 7 — AI inventory intelligence, then Procurement)
 - BUILD-031 Material consumption analytics (daily/weekly/monthly usage rate from the transaction ledger — real math, no AI needed)
 - BUILD-032 Stockout prediction (current stock ÷ consumption rate)
