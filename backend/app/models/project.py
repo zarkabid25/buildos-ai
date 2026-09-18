@@ -22,7 +22,9 @@ class Project(TenantBase):
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     budget: Mapped[float] = mapped_column(Numeric(18, 2), default=0)
     status: Mapped[ProjectStatus] = mapped_column(
-        Enum(ProjectStatus, name="project_status"), default=ProjectStatus.PLANNING, nullable=False
+        Enum(ProjectStatus, name="project_status", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        default=ProjectStatus.PLANNING,
+        nullable=False,
     )
     progress_percent: Mapped[int] = mapped_column(default=0)
 

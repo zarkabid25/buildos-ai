@@ -25,6 +25,7 @@ user_role_enum = postgresql.ENUM(
     "accountant",
     "viewer",
     name="user_role",
+    create_type=False,
 )
 
 

@@ -16,8 +16,8 @@ down_revision: Union[str, None] = "0002"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-task_status_enum = postgresql.ENUM("todo", "in_progress", "blocked", "done", name="task_status")
-task_priority_enum = postgresql.ENUM("low", "medium", "high", "urgent", name="task_priority")
+task_status_enum = postgresql.ENUM("todo", "in_progress", "blocked", "done", name="task_status", create_type=False)
+task_priority_enum = postgresql.ENUM("low", "medium", "high", "urgent", name="task_priority", create_type=False)
 
 
 def upgrade() -> None:

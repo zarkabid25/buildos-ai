@@ -21,9 +21,13 @@ class Task(TenantBase):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
     priority: Mapped[TaskPriority] = mapped_column(
-        Enum(TaskPriority, name="task_priority"), default=TaskPriority.MEDIUM, nullable=False
+        Enum(TaskPriority, name="task_priority", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        default=TaskPriority.MEDIUM,
+        nullable=False,
     )
     status: Mapped[TaskStatus] = mapped_column(
-        Enum(TaskStatus, name="task_status"), default=TaskStatus.TODO, nullable=False
+        Enum(TaskStatus, name="task_status", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        default=TaskStatus.TODO,
+        nullable=False,
     )
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
