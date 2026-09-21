@@ -250,3 +250,30 @@ Transaction history, performance scoring (price/quality/delivery/reliability), a
 - BUILD-047 Automatic inventory update (goods receipt approval creates real `STOCK_IN` transactions — the payoff of the append-only ledger design from Day 6)
 - RFQ/quotation comparison (BUILD-041..043) deferred behind the core PO flow — noted as a scope cut, not silently dropped
 - Once real POs exist, circle back and actually build BUILD-037/038/039 with real data
+
+---
+
+## Day 9 — 2026-09-23 — Procurement: the killer workflow closes the loop (BUILD-040, 044..047)
+
+### Done
+This is the day the spec's "killer workflow" (Project → BOQ → Material Requirement → Procurement → PO → Goods Receipt → Inventory → Consumption) becomes a real, working, tested path through the system rather than separate unconnected modules.
+
+- **BUILD-040** Material request: `MaterialRequest` + `MaterialRequestItem` models (project-scoped, multi-line), `pending → approved/rejected/converted` status, `/api/v1/material-requests` endpoints.
+- **BUILD-044** Purchase order: `PurchaseOrder` + `PurchaseOrderItem` models, auto-generated sequential PO numbers (`PO-1001`, ...), optional link back to the material request that spawned it (auto-marks that request `converted`), `total_amount` computed from line items (same computed-property pattern as BOQ `amount` and inventory stock — never a stored, driftable total). `/api/v1/purchase-orders`.
+- **BUILD-045** PO approval: POs are created in `pending_approval` (not `draft` — no RFQ/quotation step exists yet to justify a separate draft stage, see the cut below), and can only move to `approved` via a dedicated `POST /purchase-orders/{id}/approve` endpoint restricted to Company Admin/Super Admin/PM — matches CLAUDE.md rule 14 (approval workflows for important actions). A PO that isn't `pending_approval` can't be re-approved.
+- **BUILD-046** Goods receipt: `GoodsReceipt` + `GoodsReceiptItem` models. Receiving is only allowed against an `approved` or `partially_received` PO, and each line is validated against the *remaining* quantity on that PO item (`quantity - quantity_received`), not the original order quantity — so partial receipts across multiple deliveries can't be over-received in total. PO status auto-transitions to `partially_received` or `received` depending on whether every line is fully received.
+- **BUILD-047** Automatic inventory update: this is the payoff of the Day 6 append-only ledger design. Every goods-receipt line posts a real `STOCK_IN` `InventoryTransaction` (referenced by PO number) in the same transaction as the receipt itself — inventory reflects reality the moment goods are actually received, no separate manual "stock in" step for anything that came through procurement.
+- Frontend: `/procurement` page — material request form, PO creation form, a PO table with status badges and inline Approve / Receive actions (warehouse + quantity inputs appear once a PO is approved). Sidebar "Material Requests" and "Purchase Orders" both route here.
+
+### Scope cut, stated plainly
+BUILD-041/042/043 (RFQ, supplier quotations, quotation comparison) are not built. Doing them properly means a real multi-supplier bidding workflow, which is a substantial feature on its own and would have meant either rushing it today or skipping verification depth on the PO/goods-receipt/inventory chain — the actually load-bearing part of the "killer workflow" the whole product spec is built around. Chose depth on the core chain over breadth across every ticket. Marked as deferred, not done, in the tracker.
+
+### Verified end-to-end — the full chain, not just each piece in isolation
+Ran one continuous scenario against in-memory SQLite: material request created (pending) → purchase order created referencing it (material request auto-converts, PO total = 500 × 1,400 = 700,000, confirmed) → **goods receipt correctly rejected before approval** → PO approved (approver recorded) → partial receipt of 300/500 → **inventory stock automatically shows 300** (no manual stock-in call) → PO status correctly `partially_received` → **over-receiving the remaining 200 as 9999 correctly rejected** → remaining 200 received → PO status correctly `received` → **final inventory stock = 500**, matching the full PO quantity exactly. Also confirmed cross-tenant access is rejected for both fetching and approving a PO (404). `/openapi.json` confirms all 7 new routes register correctly. Frontend `tsc --noEmit` clean. Restarted the live local backend, confirmed a single clean process on port 8000.
+
+### Next (Day 10 — Finance foundation)
+- BUILD-048 Project budget
+- BUILD-049 Expense management
+- BUILD-051 Project cost calculation (committed = open PO value, actual = received/expensed value — now possible with real PO data)
+- BUILD-052 Budget vs actual
+- Once expense/cost data exists, this also finally unblocks BUILD-037/038 (supplier transaction history + performance) from Day 8

@@ -39,3 +39,19 @@ class InventoryTransactionType(str, enum.Enum):
     TRANSFER_IN = "transfer_in"
     TRANSFER_OUT = "transfer_out"
     ALLOCATION = "allocation"
+
+
+class MaterialRequestStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    CONVERTED = "converted"
+
+
+class PurchaseOrderStatus(str, enum.Enum):
+    DRAFT = "draft"
+    PENDING_APPROVAL = "pending_approval"
+    APPROVED = "approved"
+    PARTIALLY_RECEIVED = "partially_received"
+    RECEIVED = "received"
+    CANCELLED = "cancelled"

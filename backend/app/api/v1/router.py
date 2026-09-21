@@ -9,6 +9,7 @@ from app.api.v1 import (
     inventory,
     materials,
     milestones,
+    procurement,
     project_members,
     projects,
     suppliers,
@@ -30,3 +31,4 @@ api_router.include_router(warehouses.router)
 api_router.include_router(inventory.router)
 api_router.include_router(forecast.router)
 api_router.include_router(suppliers.router)
+api_router.include_router(procurement.router)

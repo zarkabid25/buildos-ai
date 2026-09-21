@@ -32,8 +32,8 @@ const NAV_SECTIONS: NavEntry[] = [
       { label: "Inventory", href: "/inventory" },
       { label: "Warehouses", href: "/inventory" },
       { label: "Suppliers", href: "/suppliers" },
-      { label: "Material Requests", href: null },
-      { label: "Purchase Orders", href: null },
+      { label: "Material Requests", href: "/procurement" },
+      { label: "Purchase Orders", href: "/procurement" },
     ],
   },
   {

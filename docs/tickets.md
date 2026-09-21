@@ -56,14 +56,14 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [ ] BUILD-039 AI supplier insights (blocked on Purchase Orders — Epic 8)
 
 ## Epic 8 — Procurement
-- [ ] BUILD-040 Material request
-- [ ] BUILD-041 RFQ
-- [ ] BUILD-042 Supplier quotation
-- [ ] BUILD-043 Quotation comparison
-- [ ] BUILD-044 Purchase order
-- [ ] BUILD-045 PO approval
-- [ ] BUILD-046 Goods receipt
-- [ ] BUILD-047 Automatic inventory update
+- [x] BUILD-040 Material request
+- [ ] BUILD-041 RFQ (deferred — scope cut, see daily log)
+- [ ] BUILD-042 Supplier quotation (deferred — scope cut, see daily log)
+- [ ] BUILD-043 Quotation comparison (deferred — scope cut, see daily log)
+- [x] BUILD-044 Purchase order
+- [x] BUILD-045 PO approval
+- [x] BUILD-046 Goods receipt
+- [x] BUILD-047 Automatic inventory update
 
 ## Epic 9 — Finance
 - [ ] BUILD-048 Project budget
