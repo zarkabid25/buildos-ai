@@ -23,6 +23,7 @@ from app.models.procurement import (  # noqa: F401
     GoodsReceipt,
     GoodsReceiptItem,
 )
+from app.models.expense import ExpenseCategory, Expense  # noqa: F401
 from app.models.material import MaterialCategory, Material  # noqa: F401
 from app.models.warehouse import Warehouse  # noqa: F401
 from app.models.inventory_transaction import InventoryTransaction  # noqa: F401

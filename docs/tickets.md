@@ -66,19 +66,19 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [x] BUILD-047 Automatic inventory update
 
 ## Epic 9 — Finance
-- [ ] BUILD-048 Project budget
-- [ ] BUILD-049 Expense management
-- [ ] BUILD-050 Expense categories
-- [ ] BUILD-051 Project cost calculation
-- [ ] BUILD-052 Budget vs actual
-- [ ] BUILD-053 Forecast cost
-- [ ] BUILD-054 Cash/payment tracking
+- [x] BUILD-048 Project budget
+- [x] BUILD-049 Expense management
+- [x] BUILD-050 Expense categories
+- [x] BUILD-051 Project cost calculation
+- [x] BUILD-052 Budget vs actual
+- [x] BUILD-053 Forecast cost
+- [ ] BUILD-054 Cash/payment tracking (deferred — see daily log)
 
 ## Epic 10 — AI Cost Intelligence
-- [ ] BUILD-055 Cost variance detection
-- [ ] BUILD-056 Cost forecast
-- [ ] BUILD-057 Budget overrun prediction
-- [ ] BUILD-058 AI cost explanation
+- [x] BUILD-055 Cost variance detection (delivered via cost-summary's `expected_variance`)
+- [x] BUILD-056 Cost forecast (delivered via cost-summary's `forecast`, earned-value-style projection)
+- [x] BUILD-057 Budget overrun prediction (`expected_variance > 0`, same underlying number, surfaced with red/green in the UI)
+- [ ] BUILD-058 AI cost explanation ("Why is this project over budget?" needs the AI Copilot/LLM infra from Epic 16 — not built yet)
 
 ## Epic 11 — Daily Site Operations
 - [ ] BUILD-059 Daily report

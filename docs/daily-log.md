@@ -277,3 +277,31 @@ Ran one continuous scenario against in-memory SQLite: material request created (
 - BUILD-051 Project cost calculation (committed = open PO value, actual = received/expensed value — now possible with real PO data)
 - BUILD-052 Budget vs actual
 - Once expense/cost data exists, this also finally unblocks BUILD-037/038 (supplier transaction history + performance) from Day 8
+
+---
+
+## Day 10 — 2026-09-24 — Finance: budget, expenses, cost forecast (BUILD-048..053, 055..057)
+
+### Done
+- **BUILD-048/049/050** Project budget, expense management, expense categories: `ExpenseCategory`, `Expense` models (project-scoped, dated, categorized), `/api/v1/expenses` and `/api/v1/expense-categories`. Project budget itself reuses the `Project.budget` field that's existed since Day 3 — no new model needed there.
+- **BUILD-051/052** Project cost calculation + budget vs actual: `GET /projects/{id}/cost-summary` returns original budget, **committed** (sum of every non-cancelled PO's `total_amount` for the project — money earmarked at approval, not just at spend), **actual** (sum of recorded expenses), and **remaining** (`budget − committed − actual`).
+- **BUILD-053 / 055 / 056 / 057** Forecast cost, cost variance detection, budget overrun prediction: all the same computation, exposed through one field each. `forecast` is a simple earned-value-style projection — if the project has recorded progress, `forecast = actual ÷ progress% × 100` (the same "spend rate so far, extrapolated to 100% complete" idea real cost control uses); with no progress recorded yet, it honestly falls back to `committed + actual` rather than pretending to project something it can't, and says so in a `forecast_basis` string the UI displays directly. `expected_variance = forecast − budget` *is* both the variance detection and the overrun prediction — a positive number is an overrun, and the frontend color-codes it red/green accordingly. All genuinely computed, no LLM involved (same honesty stance as Day 7's inventory forecast).
+- Frontend: new "Costs" tab on the project detail page — a 6-figure budget summary (Original / Committed / Actual / Remaining / Forecast / Expected Variance) matching the spec's Finance Screen layout, plus an expense list + add form.
+
+### Deliberate simplification, stated in the code
+"Actual" spend is defined strictly as recorded `Expense` rows — goods receipts do **not** auto-create an expense. Doing so would double-count the same money as both "committed" (via the PO) and "actual" (via an auto-generated expense) unless a receipt also reduced the committed figure accordingly, which adds real complexity for a distinction (accrual timing) that doesn't change the MVP's usefulness. Documented directly in `finance_service.py` rather than silently chosen.
+
+### Deferred: BUILD-054 (cash/payment tracking)
+Not built today. The spec explicitly says to keep this lightweight, and expenses already cover "money spent on the project" for cost-control purposes; payment tracking (which invoices are paid vs outstanding) is a distinct concern from project cost visibility and didn't fit today's scope without shortchanging verification on the forecast math. Tracked as a gap, not silently dropped.
+
+### Verified end-to-end
+- Fresh venv install, then a real run against in-memory SQLite: created a project with a 1,000,000 budget, a 200,000 PO, and 150,000 in expenses. Checked the cost summary twice — once with no progress recorded (forecast correctly falls back to committed + actual = 350,000) and once after setting progress to 25% (forecast correctly recalculates to 150,000 ÷ 25% = 600,000, variance correctly = 600,000 − 1,000,000 = −400,000). Both hand-worked and asserted in code, not eyeballed.
+- Confirmed cross-tenant access to a cost summary is rejected (404).
+- `/openapi.json` confirms all 3 new routes register correctly.
+- Frontend: `tsc --noEmit` clean.
+- Restarted the live local backend, confirmed a single clean process on port 8000, health check passes.
+
+### Next (Day 11 — Workforce + Equipment, then Daily Reports)
+- BUILD-063 Employee CRUD, BUILD-064 project assignment, BUILD-065 attendance, BUILD-066 labor cost
+- BUILD-068 Equipment CRUD, BUILD-069 project assignment, BUILD-070 maintenance records
+- Circle back to BUILD-037/038 (supplier performance) now that real PO/expense data exists to compute it from honestly
