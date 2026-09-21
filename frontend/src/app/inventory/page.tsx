@@ -11,8 +11,10 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api";
 import {
+  useAnomalies,
   useCreateMaterial,
   useCreateWarehouse,
+  useForecasts,
   useInventoryDashboard,
   useMaterials,
   useStockIn,
@@ -28,6 +30,8 @@ export default function InventoryPage() {
   const { data: dashboard } = useInventoryDashboard();
   const { data: stockLevels } = useStockLevels();
   const { data: materials } = useMaterials();
+  const { data: forecasts } = useForecasts();
+  const { data: anomalies } = useAnomalies();
   const { data: warehouses } = useWarehouses();
 
   const createMaterial = useCreateMaterial();
@@ -216,6 +220,69 @@ export default function InventoryPage() {
             </tbody>
           </table>
         </Card>
+
+        <Card>
+          <h2 className="mb-1 text-sm font-semibold text-ink">AI Inventory Forecast</h2>
+          <p className="mb-3 text-xs text-muted">
+            Consumption rate and days-to-stockout, computed from actual stock-out history (last 30
+            days). Materials with no recorded consumption show no estimate rather than a guess.
+          </p>
+          {(!forecasts || forecasts.length === 0) && (
+            <p className="text-sm text-muted">No materials to forecast yet.</p>
+          )}
+          {forecasts && forecasts.length > 0 && (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+                  <th className="px-2 py-2">Material</th>
+                  <th className="px-2 py-2">Stock</th>
+                  <th className="px-2 py-2">Daily Usage</th>
+                  <th className="px-2 py-2">Stockout</th>
+                  <th className="px-2 py-2">Recommendation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forecasts.map((f) => (
+                  <tr key={f.material_id} className="border-b border-border last:border-0 align-top">
+                    <td className="px-2 py-2 text-ink">{f.material_name}</td>
+                    <td className="px-2 py-2 text-ink">
+                      {f.current_stock} {f.unit}
+                    </td>
+                    <td className="px-2 py-2 text-muted">
+                      {Number(f.daily_avg_usage).toFixed(1)} {f.unit}/day
+                    </td>
+                    <td className="px-2 py-2">
+                      {f.days_remaining !== null ? (
+                        <span className={f.days_remaining <= 7 ? "font-medium text-danger" : "text-ink"}>
+                          {f.days_remaining} days
+                        </span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="max-w-xs px-2 py-2 text-xs text-muted">{f.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+
+        {anomalies && anomalies.length > 0 && (
+          <Card className="border-warning/40 bg-amber-50/40">
+            <h2 className="mb-1 text-sm font-semibold text-ink">⚠️ Consumption Anomalies</h2>
+            <p className="mb-3 text-xs text-muted">
+              Materials where the last 7 days of usage is at least 50% above the prior baseline.
+            </p>
+            <ul className="space-y-2">
+              {anomalies.map((a) => (
+                <li key={a.material_id} className="text-sm text-ink">
+                  <span className="font-medium">{a.material_name}</span> — {a.message}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
       </div>
     </AppShell>
   );

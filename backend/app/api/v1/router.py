@@ -4,6 +4,7 @@ from app.api.v1 import (
     auth,
     boq,
     companies,
+    forecast,
     health,
     inventory,
     materials,
@@ -26,3 +27,4 @@ api_router.include_router(boq.router)
 api_router.include_router(materials.router)
 api_router.include_router(warehouses.router)
 api_router.include_router(inventory.router)
+api_router.include_router(forecast.router)

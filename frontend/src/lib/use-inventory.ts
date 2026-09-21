@@ -4,6 +4,8 @@ import { useAuth } from "@/lib/auth-context";
 import type {
   InventoryDashboard,
   Material,
+  MaterialAnomaly,
+  MaterialForecast,
   MaterialStockLevel,
   Warehouse,
 } from "@/lib/inventory-types";
@@ -60,6 +62,24 @@ export function useStockLevels() {
   return useQuery({
     queryKey: ["inventory", "stock"],
     queryFn: () => api.get<MaterialStockLevel[]>("/inventory/stock", accessToken ?? undefined),
+    enabled: !!accessToken,
+  });
+}
+
+export function useForecasts() {
+  const { accessToken } = useAuth();
+  return useQuery({
+    queryKey: ["inventory", "forecast"],
+    queryFn: () => api.get<MaterialForecast[]>("/inventory/forecast", accessToken ?? undefined),
+    enabled: !!accessToken,
+  });
+}
+
+export function useAnomalies() {
+  const { accessToken } = useAuth();
+  return useQuery({
+    queryKey: ["inventory", "anomalies"],
+    queryFn: () => api.get<MaterialAnomaly[]>("/inventory/anomalies", accessToken ?? undefined),
     enabled: !!accessToken,
   });
 }

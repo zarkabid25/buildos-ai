@@ -43,10 +43,10 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [x] BUILD-030 Inventory dashboard
 
 ## Epic 6 — AI Inventory
-- [ ] BUILD-031 Material consumption analytics
-- [ ] BUILD-032 Stockout prediction
-- [ ] BUILD-033 AI reorder recommendation
-- [ ] BUILD-034 Material anomaly detection
+- [x] BUILD-031 Material consumption analytics
+- [x] BUILD-032 Stockout prediction
+- [x] BUILD-033 AI reorder recommendation
+- [x] BUILD-034 Material anomaly detection
 
 ## Epic 7 — Suppliers
 - [ ] BUILD-035 Supplier CRUD

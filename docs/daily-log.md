@@ -196,3 +196,30 @@ Confirmed the backend's `/auth/refresh` response shape (`access_token`/`refresh_
 - BUILD-032 Stockout prediction (current stock ÷ consumption rate)
 - BUILD-033 AI reorder recommendation (same honesty rule as the BOQ assistant — deterministic math dressed as a recommendation, not a real LLM call, until AI infra exists)
 - Start of Epic 8 Procurement (material requests) once inventory intelligence is in place
+
+---
+
+## Day 7 — 2026-09-21 — AI inventory intelligence (BUILD-031..034)
+
+### Done
+- **BUILD-031** Material consumption analytics: `forecast_service.get_consumption_rate()` sums `STOCK_OUT` + `ALLOCATION` transactions over a trailing 30-day window (transfers are deliberately excluded — moving stock between warehouses isn't consumption, it nets to zero company-wide) and derives daily/weekly/monthly averages. `GET /inventory/materials/{id}/consumption`.
+- **BUILD-032** Stockout prediction: `days_remaining = current_stock / daily_avg_usage`, `estimated_stockout_date = today + days_remaining`. `GET /inventory/materials/{id}/forecast` and `GET /inventory/forecast` (all materials).
+- **BUILD-033** Reorder recommendation: when `days_remaining` is at or below a 7-day lead-time buffer, recommends ordering enough to cover 30 days at the current rate (`ceil(daily_avg × 30 − current_stock)`). Unlike the Day 5 BOQ generator, this one is **genuinely computed**, not a placeholder template — it's the same kind of deterministic arithmetic as the project health score, not an LLM call, and doesn't need to be one to be a legitimate recommendation (matches the product spec's own "Order 5,000 bags" example, which is arithmetic, not generative).
+- **BUILD-034** Material anomaly detection: flags a material when the last 7 days' daily average consumption is ≥1.5× the prior 23-day baseline. `GET /inventory/anomalies`.
+- Frontend: `/inventory` page gains an "AI Inventory Forecast" table (stock, daily usage, days-to-stockout highlighted red under 7 days, recommendation text) and a highlighted "Consumption Anomalies" card when any are detected.
+
+### A real gap I found and fixed during testing, not just after
+Built a proper test scenario with backdated transactions (a material with steady ~10/day consumption for 3 weeks, then a spike to 40/day in the most recent week) specifically to exercise the anomaly detector against the forecast together — and it exposed a real problem: the anomaly detector correctly flagged the spike, but the stockout forecast, using a flat 30-day trailing average, was still reporting a comfortable 29-day runway because the older, calmer weeks diluted the average. For a feature whose entire point is catching risk early, silently under-reacting to a spike it had *just* detected itself would have been a real defect, not a nitpick. Fixed by having the forecast use the more conservative (higher) of the 30-day rate and the most recent 7-day rate — re-ran the same scenario and confirmed it now reports 12 days remaining (matching the real recent rate), while a separate steady-state material's forecast was unaffected by the change, and a third scenario confirmed the reorder recommendation itself triggers correctly (3 days remaining → recommends ordering 80 bags to cover 30 days).
+
+### Verified end-to-end
+- Fresh venv install, then a test with realistic backdated `InventoryTransaction` rows (not just today's data) covering: consumption rate math (500 total / 30 days = 16.67/day), the spike-detection fix (12 vs. the wrong 29 days), a steady-state material unaffected by the fix, and an explicit reorder-trigger scenario (3 days remaining → 80-bag recommendation, math double-checked).
+- `/openapi.json` confirms all 4 new routes register correctly.
+- Frontend: `tsc --noEmit` clean (skipped a separate `next build` this time since the live dev server was running — checked Fast Refresh compiled without errors instead, per the lesson from the earlier cache-corruption incident).
+- Restarted the live local backend the user has been testing against, confirmed exactly one process listening on port 8000 (no repeat of the earlier duplicate-process problem), health check passes.
+
+### Next (Day 8 — Suppliers)
+- BUILD-035 Supplier CRUD
+- BUILD-036 Supplier contacts
+- BUILD-037 Supplier transaction history
+- BUILD-038 Supplier performance (price/quality/delivery/reliability scoring)
+- BUILD-039 AI supplier insights (same honesty standard — real math from PO/delivery history, not a fake LLM call)

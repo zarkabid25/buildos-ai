@@ -53,3 +53,25 @@ export interface InventoryDashboard {
   out_of_stock_count: number;
   warehouse_count: number;
 }
+
+export interface MaterialForecast {
+  material_id: string;
+  material_name: string;
+  unit: string;
+  current_stock: string;
+  daily_avg_usage: string;
+  estimated_stockout_date: string | null;
+  days_remaining: number | null;
+  recommended_order_quantity: string | null;
+  reason: string;
+}
+
+export interface MaterialAnomaly {
+  material_id: string;
+  material_name: string;
+  unit: string;
+  recent_daily_avg: string;
+  baseline_daily_avg: string;
+  change_percent: string;
+  message: string;
+}

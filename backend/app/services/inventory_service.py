@@ -49,6 +49,23 @@ def get_stock_on_hand(
     return total
 
 
+def get_total_stock_on_hand(db: Session, company_id: uuid.UUID, material_id: uuid.UUID) -> Decimal:
+    """Stock on hand for a material summed across every warehouse."""
+    rows = (
+        db.query(InventoryTransaction.transaction_type, func.sum(InventoryTransaction.quantity))
+        .filter(InventoryTransaction.company_id == company_id, InventoryTransaction.material_id == material_id)
+        .group_by(InventoryTransaction.transaction_type)
+        .all()
+    )
+    total = Decimal("0")
+    for tx_type, qty in rows:
+        if tx_type in _IN_TYPES:
+            total += qty
+        elif tx_type in _OUT_TYPES:
+            total -= qty
+    return total
+
+
 def stock_in(
     db: Session, company_id: uuid.UUID, user_id: uuid.UUID, payload: StockInRequest
 ) -> InventoryTransaction:
@@ -190,19 +207,7 @@ def get_dashboard(db: Session, company_id: uuid.UUID) -> InventoryDashboard:
     low_stock = 0
     out_of_stock = 0
     for material in materials:
-        total = Decimal("0")
-        rows = (
-            db.query(InventoryTransaction.transaction_type, func.sum(InventoryTransaction.quantity))
-            .filter(InventoryTransaction.company_id == company_id, InventoryTransaction.material_id == material.id)
-            .group_by(InventoryTransaction.transaction_type)
-            .all()
-        )
-        for tx_type, qty in rows:
-            if tx_type in _IN_TYPES:
-                total += qty
-            elif tx_type in _OUT_TYPES:
-                total -= qty
-
+        total = get_total_stock_on_hand(db, company_id, material.id)
         if total <= 0:
             out_of_stock += 1
         elif total <= material.reorder_point:
