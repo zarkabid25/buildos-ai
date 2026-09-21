@@ -49,11 +49,11 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [x] BUILD-034 Material anomaly detection
 
 ## Epic 7 — Suppliers
-- [ ] BUILD-035 Supplier CRUD
-- [ ] BUILD-036 Supplier contacts
-- [ ] BUILD-037 Supplier transaction history
-- [ ] BUILD-038 Supplier performance
-- [ ] BUILD-039 AI supplier insights
+- [x] BUILD-035 Supplier CRUD
+- [x] BUILD-036 Supplier contacts
+- [ ] BUILD-037 Supplier transaction history (blocked on Purchase Orders — Epic 8)
+- [ ] BUILD-038 Supplier performance (blocked on Purchase Orders — Epic 8)
+- [ ] BUILD-039 AI supplier insights (blocked on Purchase Orders — Epic 8)
 
 ## Epic 8 — Procurement
 - [ ] BUILD-040 Material request

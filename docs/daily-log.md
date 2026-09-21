@@ -223,3 +223,30 @@ Built a proper test scenario with backdated transactions (a material with steady
 - BUILD-037 Supplier transaction history
 - BUILD-038 Supplier performance (price/quality/delivery/reliability scoring)
 - BUILD-039 AI supplier insights (same honesty standard — real math from PO/delivery history, not a fake LLM call)
+
+---
+
+## Day 8 — 2026-09-22 — Suppliers (BUILD-035, 036)
+
+### Done
+- **BUILD-035** Supplier CRUD: `Supplier` model, service, `/api/v1/suppliers` endpoints.
+- **BUILD-036** Supplier contacts: `SupplierContact` model (nested under a supplier), service, `/api/v1/suppliers/{id}/contacts` endpoints.
+- Alembic migration `0006_suppliers`.
+- Frontend: `/suppliers` page with a list + add-supplier form. Sidebar link wired up.
+
+### Deliberately not built today: BUILD-037/038/039
+Transaction history, performance scoring (price/quality/delivery/reliability), and AI supplier insights all need real Purchase Order and delivery data to mean anything — the spec's own example ("Delivery performance decreased 13%...") is a computed statement about actual order history. Building these now would mean either fabricating plausible-looking numbers or shipping permanently-empty endpoints until Procurement exists, and both break the no-invented-data rule this project has held to since Day 3 (the project health score) and Day 7 (the inventory forecast). Marked as blocked in `docs/tickets.md` rather than checked off, and the `/suppliers` page says so directly instead of pretending the feature is coming from nowhere. Procurement (Epic 8: material requests → purchase orders → goods receipts) is next, which unblocks all three with real data.
+
+### Verified end-to-end
+- Fresh venv install, then a real run against in-memory SQLite: created a supplier, added a contact, confirmed contact count, confirmed cross-tenant supplier access is rejected (404), deleted the supplier and confirmed the list is empty afterward.
+- `/openapi.json` confirms all 6 supplier routes register correctly.
+- Frontend: `tsc --noEmit` clean.
+- Restarted the live local backend the user is testing against, confirmed a single clean process on port 8000, health check passes.
+
+### Next (Day 9 — Procurement: material requests → purchase orders → goods receipt)
+- BUILD-040 Material request
+- BUILD-044 Purchase order (+ BUILD-045 approval workflow, per CLAUDE.md rule 14)
+- BUILD-046 Goods receipt
+- BUILD-047 Automatic inventory update (goods receipt approval creates real `STOCK_IN` transactions — the payoff of the append-only ledger design from Day 6)
+- RFQ/quotation comparison (BUILD-041..043) deferred behind the core PO flow — noted as a scope cut, not silently dropped
+- Once real POs exist, circle back and actually build BUILD-037/038/039 with real data

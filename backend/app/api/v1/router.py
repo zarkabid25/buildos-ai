@@ -11,6 +11,7 @@ from app.api.v1 import (
     milestones,
     project_members,
     projects,
+    suppliers,
     tasks,
     warehouses,
 )
@@ -28,3 +29,4 @@ api_router.include_router(materials.router)
 api_router.include_router(warehouses.router)
 api_router.include_router(inventory.router)
 api_router.include_router(forecast.router)
+api_router.include_router(suppliers.router)
