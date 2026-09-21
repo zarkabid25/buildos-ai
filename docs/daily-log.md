@@ -305,3 +305,29 @@ Not built today. The spec explicitly says to keep this lightweight, and expenses
 - BUILD-063 Employee CRUD, BUILD-064 project assignment, BUILD-065 attendance, BUILD-066 labor cost
 - BUILD-068 Equipment CRUD, BUILD-069 project assignment, BUILD-070 maintenance records
 - Circle back to BUILD-037/038 (supplier performance) now that real PO/expense data exists to compute it from honestly
+
+---
+
+## Day 11 — 2026-09-25 — Workforce + Equipment (BUILD-063..071)
+
+### Done
+- **BUILD-063/064** Employee CRUD + project assignment: `Employee` model (designation, daily wage, hire date), `EmployeeProjectAssignment` join table (unique per employee+project, same pattern as `ProjectMember` from Day 4), `/api/v1/employees` endpoints.
+- **BUILD-065** Attendance: `Attendance` model, one record per employee per day (unique constraint — recording twice for the same day is rejected, not silently overwritten), status enum (present/absent/half_day/leave), `/api/v1/attendance`.
+- **BUILD-066** Labor cost: `GET /projects/{id}/labor-cost` sums `daily_wage` for every `present` day and half of it for every `half_day`, per project — genuinely computed from the attendance ledger, not estimated.
+- **BUILD-067** Basic productivity analytics: `GET /employees/{id}/productivity` returns an attendance rate (`present ÷ total_recorded × 100`) — the "basic" in the ticket name is deliberate; true output-based productivity would need task/unit-completed data this MVP doesn't track yet, so attendance rate is the honest floor for what "productivity" can mean right now.
+- **BUILD-068/069/070/071** Equipment CRUD + assignment + maintenance + reminders: `Equipment` model with a `current_project_id` field (assignment is just setting this via `PATCH`, no separate assignment table needed since equipment can only be in one place at a time, unlike employees who can be assigned to multiple projects over time), `EquipmentMaintenance` records, and `GET /equipment/reminders` — flags equipment whose most recent maintenance record's `next_due_date` is overdue or within 14 days. Equipment with **no** maintenance history is correctly excluded from reminders rather than flagged as a false "overdue," which was worth a dedicated test case (see below).
+- Frontend: new `/workforce` page (employee list, add-employee form, record-attendance form) and `/equipment` page (equipment list with inline status dropdown, add-equipment form, a highlighted maintenance-reminders card). Sidebar wired up for both.
+
+### Verified end-to-end
+- Fresh venv install, then a real run against in-memory SQLite covering the full scenario: two employees, one assigned to a project (duplicate assignment correctly rejected), five attendance records across both (duplicate same-day attendance correctly rejected) — hand-worked expected labor cost (2 present days + 1 half day for a 1,800/day mason = 4,500, plus 1 present day for a 1,200/day laborer = 1,200, total **5,700**) matched exactly; productivity for the laborer (1 present of 2 recorded) matched the expected 50%.
+- Equipment reminders: four pieces of equipment — one due in 5 days, one overdue by 3 days, one due in 60 days, and one with **no maintenance history at all**. Confirmed only the two within the 14-day window appear, confirmed the far-future and no-history equipment are correctly excluded (not flagged), and confirmed the overdue one sorts first.
+- `/openapi.json` confirms all 10 new routes register correctly.
+- Frontend: `tsc --noEmit` clean.
+- Restarted the live local backend, confirmed a single clean process on port 8000, health check passes.
+
+### Next (Day 12 — Daily Reports, then Documents)
+- BUILD-059 Daily report (weather, workers, work completed, materials consumed, problems, notes)
+- BUILD-060 Daily report list
+- BUILD-061 Photo uploads (needs object storage — check what's actually available in this environment before committing to a real S3-compatible backend vs. a documented local-disk stand-in)
+- BUILD-062 AI daily report generation deferred until real AI infra exists (same honesty rule as BOQ/reorder assistants)
+- Then Epic 14 Documents (upload, categories, metadata)

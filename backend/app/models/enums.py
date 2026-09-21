@@ -55,3 +55,17 @@ class PurchaseOrderStatus(str, enum.Enum):
     PARTIALLY_RECEIVED = "partially_received"
     RECEIVED = "received"
     CANCELLED = "cancelled"
+
+
+class AttendanceStatus(str, enum.Enum):
+    PRESENT = "present"
+    ABSENT = "absent"
+    HALF_DAY = "half_day"
+    LEAVE = "leave"
+
+
+class EquipmentStatus(str, enum.Enum):
+    AVAILABLE = "available"
+    IN_USE = "in_use"
+    MAINTENANCE = "maintenance"
+    RETIRED = "retired"

@@ -4,6 +4,7 @@ from app.api.v1 import (
     auth,
     boq,
     companies,
+    equipment,
     finance,
     forecast,
     health,
@@ -16,6 +17,7 @@ from app.api.v1 import (
     suppliers,
     tasks,
     warehouses,
+    workforce,
 )
 
 api_router = APIRouter()
@@ -34,3 +36,5 @@ api_router.include_router(forecast.router)
 api_router.include_router(suppliers.router)
 api_router.include_router(procurement.router)
 api_router.include_router(finance.router)
+api_router.include_router(workforce.router)
+api_router.include_router(equipment.router)

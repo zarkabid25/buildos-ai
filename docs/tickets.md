@@ -87,17 +87,17 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [ ] BUILD-062 AI daily report generation
 
 ## Epic 12 — Workforce
-- [ ] BUILD-063 Employee CRUD
-- [ ] BUILD-064 Project assignment
-- [ ] BUILD-065 Attendance
-- [ ] BUILD-066 Labor cost
-- [ ] BUILD-067 Basic productivity analytics
+- [x] BUILD-063 Employee CRUD
+- [x] BUILD-064 Project assignment
+- [x] BUILD-065 Attendance
+- [x] BUILD-066 Labor cost
+- [x] BUILD-067 Basic productivity analytics
 
 ## Epic 13 — Equipment
-- [ ] BUILD-068 Equipment CRUD
-- [ ] BUILD-069 Project assignment
-- [ ] BUILD-070 Maintenance records
-- [ ] BUILD-071 Maintenance reminders
+- [x] BUILD-068 Equipment CRUD
+- [x] BUILD-069 Project assignment (via `current_project_id`, updatable)
+- [x] BUILD-070 Maintenance records
+- [x] BUILD-071 Maintenance reminders
 
 ## Epic 14 — Documents
 - [ ] BUILD-072 Document upload
