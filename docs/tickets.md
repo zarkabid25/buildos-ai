@@ -100,10 +100,10 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [x] BUILD-071 Maintenance reminders
 
 ## Epic 14 — Documents
-- [ ] BUILD-072 Document upload
-- [ ] BUILD-073 Document categories
-- [ ] BUILD-074 Document preview/download
-- [ ] BUILD-075 Document metadata
+- [x] BUILD-072 Document upload
+- [x] BUILD-073 Document categories
+- [x] BUILD-074 Document preview/download (inline preview for PDF/images/text only; Office files download)
+- [x] BUILD-075 Document metadata
 
 ## Epic 15 — AI Document Intelligence
 - [ ] BUILD-076 Document text extraction
@@ -179,7 +179,7 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 ## Epic 25 — Testing
 - [ ] BUILD-127 Backend unit tests
 - [ ] BUILD-128 API integration tests
-- [ ] BUILD-129 Authentication tests (started: tests/test_auth_http.py, 7 tests over real HTTP+JWT)
+- [ ] BUILD-129 Authentication tests (done in tests/test_auth_http.py: 7 tests over real HTTP+JWT, incl. cross-tenant; role-based tests live with each module)
 - [ ] BUILD-130 Inventory tests
 - [ ] BUILD-131 Procurement tests
 - [ ] BUILD-132 Project tests

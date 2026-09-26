@@ -70,3 +70,13 @@ def resolve_path(storage_key: str) -> Path:
     if not path.is_file():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "File not found in storage")
     return path
+
+
+def delete_file(storage_key: str) -> None:
+    """Best-effort removal. A missing file is fine (already gone); a key that
+    escapes the storage root is not, and resolve_path's check still applies."""
+    root = _root()
+    path = (root / storage_key).resolve()
+    if root not in path.parents:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid storage key")
+    path.unlink(missing_ok=True)

@@ -69,3 +69,13 @@ class EquipmentStatus(str, enum.Enum):
     IN_USE = "in_use"
     MAINTENANCE = "maintenance"
     RETIRED = "retired"
+
+
+class DocumentCategory(str, enum.Enum):
+    CONTRACT = "contract"
+    DRAWING = "drawing"
+    BOQ = "boq"
+    INVOICE = "invoice"
+    REPORT = "report"
+    QUOTATION = "quotation"
+    OTHER = "other"

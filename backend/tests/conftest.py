@@ -19,8 +19,13 @@ from app.main import app  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def fresh_db():
+    import shutil
+
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    # Uploaded files must not leak between tests either, or "nothing was stored"
+    # assertions would depend on test order.
+    shutil.rmtree(os.environ["STORAGE_DIR"], ignore_errors=True)
     yield
 
 
@@ -53,3 +58,35 @@ def auth_a(client: TestClient) -> dict[str, str]:
 @pytest.fixture
 def auth_b(client: TestClient) -> dict[str, str]:
     return register(client, "BBB", "b@example.com")
+
+
+def make_user_in_company(client: TestClient, admin_headers: dict[str, str], email: str, role: str) -> dict[str, str]:
+    """There's no invite flow yet, so create the extra user directly in the DB,
+    then log in through the real API so the token path is still exercised."""
+    import uuid
+
+    from app.core.security import hash_password
+    from app.db.session import SessionLocal
+    from app.models.enums import UserRole
+    from app.models.user import User
+
+    company_id = uuid.UUID(client.get("/api/v1/auth/me", headers=admin_headers).json()["company_id"])
+    with SessionLocal() as db:
+        db.add(
+            User(
+                company_id=company_id,
+                email=email,
+                hashed_password=hash_password("password123"),
+                full_name=f"{role} user",
+                role=UserRole(role),
+            )
+        )
+        db.commit()
+    res = client.post("/api/v1/auth/login", json={"email": email, "password": "password123"})
+    assert res.status_code == 200, res.text
+    return {"Authorization": f"Bearer {res.json()['access_token']}"}
+
+
+@pytest.fixture
+def viewer_a(client: TestClient, auth_a: dict[str, str]) -> dict[str, str]:
+    return make_user_in_company(client, auth_a, "viewer@example.com", "viewer")

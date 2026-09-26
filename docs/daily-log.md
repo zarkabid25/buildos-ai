@@ -366,3 +366,30 @@ The local SQLite dev database (`backend/buildos_dev.db`) was created once and ne
 ### Next (Day 13 — Documents)
 - BUILD-072..075 document upload, categories, download, metadata (reuses the storage layer above)
 - Then decide how to handle the AI epics honestly: they need a real LLM key and network access, which I haven't confirmed exist here
+
+---
+
+## Day 13 — 2026-09-27 — Documents (BUILD-072..075)
+
+### Done
+- **BUILD-072/073/075** Upload, categories, metadata: `Document` model (title, category — contract/drawing/boq/invoice/report/quotation/other, description, original filename, content type, size, optional `project_id`), multipart `POST /api/v1/documents`, list with `project_id` and `category` filters, `PATCH` for metadata (title/category/description — never touches the stored file), `DELETE` that removes the DB row **and** the file. Migration `0011`.
+- **BUILD-074** Preview/download: `GET /documents/{id}/download`, with `?inline=true` for a browser preview. Inline is honoured only for PDF, plain text, CSV and images; anything else (Word/Excel) always downloads as an attachment. Every response carries `X-Content-Type-Options: nosniff`. `text/html` is not in the upload allow-list at all, so an uploaded file can't be served back as a page.
+- Frontend: `/documents` page (upload form with category and optional project, category filter, table with Preview / Download / Delete). Files are fetched as blobs with the auth header, since a plain link can't send it. Delete asks for confirmation.
+- Permissions: uploading and editing are limited to roles that handle project paperwork (admins, PM, site engineer, storekeeper, accountant); **viewers can read and download but not upload, edit or delete**; delete is admin/PM only.
+
+### Tests (26 total, all passing)
+`tests/test_documents_http.py` adds 10 tests through real HTTP + JWT: byte-for-byte upload/download roundtrip (and that the internal `storage_key` never appears in an API response), inline preview allowed for PDF but forced to attachment for `.docx`, `text/html` and `.exe` rejected with nothing written to disk, oversize/empty/missing-title, list filters, metadata edit leaves the file intact, attaching to **another company's project** is a 404 with nothing stored, another company can't read/download/edit/delete (all 404), **a viewer created in the same company is 403 on write actions but can read**, and delete removes the file from storage.
+- To test roles at all I added a `make_user_in_company` helper (there's no invite flow, so it inserts the user directly and then logs in through the real API).
+- Caught a test-isolation bug of my own before it bit: uploaded files persisted between tests while the DB reset, which would have made "nothing was stored" assertions order-dependent. The autouse fixture now clears storage per test.
+- Because everything passed on the first run, I checked the tests can fail: temporarily removing the tenant filter from `get_document` made the cross-company test fail (`200 == 404`, i.e. a real leak), then I restored the file. That's a one-off manual check, not an automated mutation-testing setup.
+
+### Verified live
+Before restarting the running backend I added the `documents` table to the dev database (the Day 12 lesson). Against the live server with a real login: upload → 201; list filtered by `category=contract` returns it and `category=drawing` returns nothing; inline download returns `200`, `content-disposition: inline`, `nosniff`, and the file is byte-identical to what was uploaded; an HTML upload gets `415`; delete returns `204` and a follow-up GET is `404`. The frontend page compiles and serves `200`. Frontend `tsc --noEmit` clean.
+
+### Known limits
+- Same as Day 12: local-disk storage stand-in (not S3) and no content sniffing, so BUILD-124/138 stay open.
+- No virus scanning, no versioning, and deleting a project does not yet clean up its documents.
+- Documents can't yet be edited (title/category) from the UI — the API supports it, the page only uploads/filters/previews/downloads/deletes.
+
+### Next
+The remaining big block is the AI layer (Epics 15–16: document Q&A, copilot, natural-language analytics) plus scheduling, notifications, search, reports, settings, UX polish, security hardening and deployment. Before starting the AI epics I need to confirm whether an LLM API key and outbound network access actually exist in this environment; if not, I'll say so and build what can be done honestly (e.g. the tool layer and structured-output plumbing) rather than fake model output.
