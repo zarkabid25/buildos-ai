@@ -7,6 +7,10 @@ _tmp = tempfile.mkdtemp(prefix="buildos-tests-")
 os.environ["DATABASE_URL"] = f"sqlite:///{_tmp}/test.db"
 os.environ["STORAGE_DIR"] = f"{_tmp}/storage"
 os.environ["MAX_UPLOAD_BYTES"] = str(1024 * 1024)
+# An empty env var beats a key in backend/.env, so the suite can never hit the
+# real Anthropic API even on a machine that has a key configured.
+os.environ["LLM_API_KEY"] = ""
+os.environ["LLM_MODEL"] = "claude-opus-5"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

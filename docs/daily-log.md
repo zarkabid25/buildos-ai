@@ -393,3 +393,38 @@ Before restarting the running backend I added the `documents` table to the dev d
 
 ### Next
 The remaining big block is the AI layer (Epics 15–16: document Q&A, copilot, natural-language analytics) plus scheduling, notifications, search, reports, settings, UX polish, security hardening and deployment. Before starting the AI epics I need to confirm whether an LLM API key and outbound network access actually exist in this environment; if not, I'll say so and build what can be done honestly (e.g. the tool layer and structured-output plumbing) rather than fake model output.
+
+---
+
+## Day 14 — 2026-09-28 — The AI layer, built honestly without an API key (BUILD-083, 085, 090 done; 010, 082, 084, 086–088, 133 partial)
+
+### First, what this environment actually has
+Checked before writing anything: **no API key exists** (not in the environment, `LLM_API_KEY` in `backend/.env` is empty) but the network path to `api.anthropic.com` works (HTTP 401 = "auth required"). So a real model call is impossible from here. I did not fake one. This day builds everything *around* the model, so the assistant switches on the moment a key is supplied, and separates clearly what was verified from what wasn't.
+
+### Built
+- **Rules-based insights engine** (`app/ai/insights.py`, `GET /ai/insights`): schedule risk, cost-overrun forecast, overdue tasks and milestones, stockout risk, low/out-of-stock, unusual consumption, overdue/upcoming equipment maintenance, POs awaiting approval, material requests not actioned. Every insight has a severity, a plain-English detail, and the supporting numbers. **No language model is involved**; the response carries `generated_by: "rules"` and the UI says so. It only claims a cost overrun once progress has been recorded (with 0% progress the "forecast" is just spend-so-far, not a projection). This powers the dashboard's Executive Summary card (replacing the hardcoded blurb) and a new `/ai-insights` page (BUILD-090).
+- **Read-only tool layer** (`app/ai/tools.py`, 12 tools): projects, project overview (health/cost/labor), materials, inventory status + forecasts, stock levels, consumption anomalies, purchase orders, material requests, daily reports, document metadata, company insights, and `propose_material_request`. **`company_id` is never in any tool's input schema**; it always comes from the signed-in user, so the model cannot ask for another company's data. Tool failures come back as error results the model can read, never exceptions. Lists are capped at 25 with a `truncated` flag.
+- **Draft-and-approve** (CLAUDE.md rule 12): `propose_material_request` stores an `AiProposal` (a draft) and nothing else — the real `material_requests` table is untouched. A person approves it via `POST /ai/proposals/{id}/approve`, which runs the *existing* `create_material_request` service (same validation as a hand-made request) with the **approver** as the requester. Approving twice is a 409; viewers can see proposals but not decide them.
+- **Real Anthropic client** (`app/ai/llm.py`) on the official `anthropic` SDK (added as a dependency — it's the official client), model `claude-opus-5` from `LLM_MODEL` (my earlier `claude-sonnet-5` default was my own guess, not a choice you made; changed, and your local `.env` too). Per the API reference: no `temperature`/`top_p`/`top_k` (Opus 5 rejects them), thinking left at its adaptive default, `stop_reason` checked before reading content (`refusal` handled), and server-side refusal `fallbacks: "default"` **enabled by default** (`LLM_USE_FALLBACKS=false` turns it off).
+- **Copilot loop** (`app/ai/copilot.py`): manual tool loop, capped at `LLM_MAX_TOOL_ITERATIONS` (8), all results for one turn returned in a single message. Conversations and messages are persisted (`ai_conversations`, `ai_messages`) and are **private to the user who started them**, not just their company. Migration `0012`.
+- API: `GET /ai/status` (never returns the key), `POST /ai/chat` (503 with a clear "set LLM_API_KEY" message when unconfigured; provider errors map to 429/502/503 with generic text and leave no empty conversation behind), conversations, proposals.
+- Frontend: **AI Command Center** at `/ai` (honest "isn't switched on yet" banner, insights, the approval queue, chat with suggested questions — disabled until a key exists), `/ai-insights`, and the dashboard card.
+
+### Tests: 58 passing (32 new)
+- Insights over real HTTP: empty company, a project that's behind and over budget, low stock, pending POs/requests, no false overrun at 0% progress, a healthy project produces nothing, other companies see none of it.
+- Copilot with a **scripted fake model** (this tests *our* loop, not Claude): tool results reach the model; history is saved and replayed; unknown tools and a runaway loop are contained; refusals handled; **cross-company access through tools returns errors and never leaks** (including a smuggled `company_id`); conversation privacy; proposals create nothing until approved; approval gives the person ownership; no double decisions; viewer/other-company blocked; bad proposals (foreign material, zero quantity, no items, malformed id) rejected with no draft; provider failures mapped safely.
+- The **exact request the real client sends** is captured through the SDK with a mock transport (model, beta header, `fallbacks: "default"`, tools, no sampling params). This proves the SDK serialises what I intend; it does **not** prove the live API accepts it.
+- Checked the safety tests can fail: broke tenant scoping in `list_projects`, allowed viewers to approve, and removed the "still pending" check — each broke exactly the matching test; restored afterwards. A manual check, not an automated mutation suite.
+- The suite pins `LLM_API_KEY=""` so it can never call the real API even if a key is later added to `.env`.
+
+### NOT verified, and why it matters
+Nothing has run against the real Claude API. Unknown until a key is added: whether the request is accepted (incl. the `fallbacks` beta), how well the model uses these tools, whether answers are good, latency and cost. So BUILD-082/086/087 are marked **partial**, not done. The first real-key session should be: set `LLM_API_KEY`, ask the five suggested questions, and read the answers against the data.
+
+### Deliberately not built
+- **Document Q&A / RAG (BUILD-076–081):** needs text extraction, chunking and an embeddings provider. Anthropic offers no embeddings endpoint, so this needs a separate provider decision (or lexical search) — not something to guess at.
+- BOQ/daily-report/procurement AI generation, semantic search, AI cost/risk explanation text, settings UI for the model.
+- Streaming responses, and prompt caching (fine to add once real usage shows it matters).
+- `propose_material_request` is the only proposal type; no PO drafts yet.
+
+### Next
+Set an API key and verify against the real model (highest value), then the non-AI gaps: scheduling/Gantt, notifications, search, settings, reports, UX polish, security hardening, deployment.

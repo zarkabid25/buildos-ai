@@ -24,7 +24,10 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 10 * 1024 * 1024
 
     llm_api_key: str = ""
-    llm_model: str = "claude-sonnet-5"
+    llm_model: str = "claude-opus-5"
+    llm_use_fallbacks: bool = True
+    llm_max_tokens: int = 16000
+    llm_max_tool_iterations: int = 8
 
 
 @lru_cache

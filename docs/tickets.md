@@ -1,6 +1,6 @@
 # BuildOS AI — Ticket Backlog
 
-Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, `[~]` in progress, `[x]` done.
+Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, `[~]` partly done (see note), `[x]` done.
 
 ## Epic 1 — Project Foundation
 - [x] BUILD-001 Initialize monorepo
@@ -14,7 +14,7 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 ## Epic 2 — Dashboard
 - [x] BUILD-008 Executive Dashboard
 - [x] BUILD-009 Project health widget
-- [ ] BUILD-010 AI executive summary
+- [~] BUILD-010 AI executive summary (dashboard summary is built from rules, clearly labelled as not AI; an LLM-written version needs an API key)
 
 ## Epic 3 — Projects
 - [x] BUILD-011 Project CRUD
@@ -114,17 +114,17 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [ ] BUILD-081 Document Q&A
 
 ## Epic 16 — AI Copilot
-- [ ] BUILD-082 AI chat interface
-- [ ] BUILD-083 Conversation history
-- [ ] BUILD-084 Project-aware AI context
-- [ ] BUILD-085 Database tool calling
-- [ ] BUILD-086 Natural language analytics
-- [ ] BUILD-087 AI recommendation engine
+- [~] BUILD-082 AI chat interface (built and tested with a scripted fake model; untested against the real API — no key yet)
+- [x] BUILD-083 Conversation history
+- [~] BUILD-084 Project-aware AI context (via project tools; no per-page context yet)
+- [x] BUILD-085 Database tool calling (12 tools, read-only + draft proposals, tenant-scoped, tested)
+- [~] BUILD-086 Natural language analytics (tools exist; answer quality unverified without a key)
+- [~] BUILD-087 AI recommendation engine (rules-based insights + draft-and-approve are built; model-written recommendations unverified)
 
 ## Epic 17 — Project Risk
-- [ ] BUILD-088 Risk model
+- [~] BUILD-088 Risk model (rules in app/ai/insights.py: schedule, cost, inventory, equipment, procurement)
 - [ ] BUILD-089 Project health score
-- [ ] BUILD-090 Risk dashboard
+- [x] BUILD-090 Risk dashboard (/ai-insights and dashboard card)
 - [ ] BUILD-091 AI risk explanation
 
 ## Epic 18 — Scheduling
@@ -149,7 +149,7 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [ ] BUILD-104 User settings
 - [ ] BUILD-105 Role permissions
 - [ ] BUILD-106 Currency/unit settings
-- [ ] BUILD-107 AI settings
+- [ ] BUILD-107 AI settings (model/key are server env vars only; no settings UI)
 
 ## Epic 22 — Reports
 - [ ] BUILD-108 Project report
@@ -183,7 +183,7 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [ ] BUILD-130 Inventory tests
 - [ ] BUILD-131 Procurement tests
 - [ ] BUILD-132 Project tests
-- [ ] BUILD-133 AI tests
+- [~] BUILD-133 AI tests (tool loop, scoping, approval gate, request shape: done; real model behaviour: not testable without a key)
 - [ ] BUILD-134 Frontend critical-flow tests
 
 ## Epic 26 — Deployment

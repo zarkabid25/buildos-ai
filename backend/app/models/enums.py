@@ -79,3 +79,13 @@ class DocumentCategory(str, enum.Enum):
     REPORT = "report"
     QUOTATION = "quotation"
     OTHER = "other"
+
+
+class AiProposalType(str, enum.Enum):
+    MATERIAL_REQUEST = "material_request"
+
+
+class AiProposalStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"

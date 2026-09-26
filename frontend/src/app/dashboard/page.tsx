@@ -1,7 +1,11 @@
 "use client";
 
+import Link from "next/link";
+
 import { AppShell } from "@/components/app-shell";
+import { InsightsList, RulesNote } from "@/components/insights-list";
 import { useAuth } from "@/lib/auth-context";
+import { useInsights } from "@/lib/use-ai";
 import { useProjectSummary } from "@/lib/use-projects";
 import { formatCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -11,6 +15,7 @@ export default function DashboardPage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const { data: summary, isLoading: summaryLoading } = useProjectSummary();
+  const { data: insights } = useInsights();
 
   useEffect(() => {
     if (!isLoading && !user) router.replace("/login");
@@ -47,12 +52,26 @@ export default function DashboardPage() {
         </div>
 
         <div className="rounded-card border border-border bg-surface p-5">
-          <h2 className="mb-2 text-sm font-semibold text-ink">AI Executive Summary</h2>
-          <p className="text-sm text-muted">
-            {summary && summary.total_projects > 0
-              ? `${summary.at_risk_count} of ${summary.total_projects} projects need attention. AI-generated risk explanations arrive with the AI Copilot in a later build.`
-              : "No data yet. Create your first project to get AI-powered insights here."}
-          </p>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-ink">Executive Summary</h2>
+            <Link href="/ai-insights" className="text-xs text-primary hover:underline">
+              View all insights
+            </Link>
+          </div>
+          {insights ? (
+            <>
+              <p className="mb-1 text-sm text-ink">{insights.summary}</p>
+              <RulesNote />
+              <div className="mt-2">
+                <InsightsList insights={insights.insights} limit={3} />
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted">Checking your projects...</p>
+          )}
+          <Link href="/ai" className="mt-3 inline-block text-xs text-primary hover:underline">
+            Ask BuildOS AI a question
+          </Link>
         </div>
       </div>
     </AppShell>

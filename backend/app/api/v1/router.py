@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    ai,
     auth,
     boq,
     companies,
@@ -41,4 +42,5 @@ api_router.include_router(finance.router)
 api_router.include_router(workforce.router)
 api_router.include_router(equipment.router)
 api_router.include_router(daily_reports.router)
+api_router.include_router(ai.router)
 api_router.include_router(documents.router)
