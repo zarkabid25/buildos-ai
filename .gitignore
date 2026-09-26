@@ -6,6 +6,7 @@ venv/
 *.egg-info/
 .pytest_cache/
 *.db
+storage_data/
 
 # Node / Next.js
 node_modules/

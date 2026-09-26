@@ -28,6 +28,7 @@ from app.models.procurement import (  # noqa: F401
 from app.models.expense import ExpenseCategory, Expense  # noqa: F401
 from app.models.workforce import Employee, EmployeeProjectAssignment, Attendance  # noqa: F401
 from app.models.equipment import Equipment, EquipmentMaintenance  # noqa: F401
+from app.models.daily_report import DailyReport, DailyReportPhoto  # noqa: F401
 from app.models.material import MaterialCategory, Material  # noqa: F401
 from app.models.warehouse import Warehouse  # noqa: F401
 from app.models.inventory_transaction import InventoryTransaction  # noqa: F401

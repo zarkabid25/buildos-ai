@@ -20,6 +20,9 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:3000"]
 
+    storage_dir: str = "./storage_data"
+    max_upload_bytes: int = 10 * 1024 * 1024
+
     llm_api_key: str = ""
     llm_model: str = "claude-sonnet-5"
 

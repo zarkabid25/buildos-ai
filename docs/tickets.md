@@ -81,10 +81,10 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [ ] BUILD-058 AI cost explanation ("Why is this project over budget?" needs the AI Copilot/LLM infra from Epic 16 — not built yet)
 
 ## Epic 11 — Daily Site Operations
-- [ ] BUILD-059 Daily report
-- [ ] BUILD-060 Daily report list
-- [ ] BUILD-061 Photo uploads
-- [ ] BUILD-062 AI daily report generation
+- [x] BUILD-059 Daily report
+- [x] BUILD-060 Daily report list
+- [x] BUILD-061 Photo uploads (local-disk storage stand-in, not S3 — see daily log)
+- [ ] BUILD-062 AI daily report generation (needs real LLM infra — not built)
 
 ## Epic 12 — Workforce
 - [x] BUILD-063 Employee CRUD
@@ -172,14 +172,14 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [ ] BUILD-121 API authorization
 - [ ] BUILD-122 Tenant isolation
 - [ ] BUILD-123 Input validation
-- [ ] BUILD-124 File upload validation
+- [ ] BUILD-124 File upload validation (partial: type allow-list + size cap + safe filenames exist; no content sniffing yet)
 - [ ] BUILD-125 Rate limiting
 - [ ] BUILD-126 Audit log
 
 ## Epic 25 — Testing
 - [ ] BUILD-127 Backend unit tests
 - [ ] BUILD-128 API integration tests
-- [ ] BUILD-129 Authentication tests
+- [ ] BUILD-129 Authentication tests (started: tests/test_auth_http.py, 7 tests over real HTTP+JWT)
 - [ ] BUILD-130 Inventory tests
 - [ ] BUILD-131 Procurement tests
 - [ ] BUILD-132 Project tests

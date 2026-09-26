@@ -331,3 +331,38 @@ Not built today. The spec explicitly says to keep this lightweight, and expenses
 - BUILD-061 Photo uploads (needs object storage — check what's actually available in this environment before committing to a real S3-compatible backend vs. a documented local-disk stand-in)
 - BUILD-062 AI daily report generation deferred until real AI infra exists (same honesty rule as BOQ/reorder assistants)
 - Then Epic 14 Documents (upload, categories, metadata)
+
+---
+
+## Day 12 — 2026-09-26 — Daily reports, photo uploads, and the first real test suite (BUILD-059..061)
+
+### Done
+- **BUILD-059/060** Daily reports: `DailyReport` model (date, weather, workers on site, work completed, materials consumed, equipment, problems, notes), **one report per project per day** enforced by a unique constraint (a second one is a 409, not a silent duplicate), nested under `/api/v1/projects/{id}/daily-reports`. Alembic migration `0010`.
+- **BUILD-061** Photo uploads: `DailyReportPhoto` + `POST /daily-reports/{id}/photos` (multipart) and an authenticated download endpoint.
+- Frontend: a new **Reports** tab on the project page (`components/daily-reports-panel.tsx`) with a report form, report cards, and per-report photo upload. Photos are fetched as blobs with the auth header because an `<img src>` can't send one.
+
+### Storage: what's real and what isn't
+The spec calls for S3-compatible storage. There's no Docker and no object store in this environment, so `app/core/storage.py` is a **local-disk backend behind a small interface** (`save_upload`, `resolve_path`), and callers only ever handle opaque storage keys. Moving to S3/MinIO means replacing those two functions. It is not S3 today, and BUILD-138 (storage configuration) stays open. `storage_data/` is gitignored.
+
+### Upload safety, and its limits
+Implemented: content-type allow-list (images only for photos), size cap (`MAX_UPLOAD_BYTES`, default 10 MB), empty files rejected, and the stored filename is a fresh UUID so a hostile client filename (`../../etc/passwd.png`) can never reach the filesystem path; `resolve_path` also refuses keys that escape the storage root. **Not** implemented: content sniffing. The content type is whatever the client declares, so a non-image labelled `image/png` would be accepted (it's served back as a blob to an `<img>`, so the practical risk is low, but it isn't real validation). BUILD-124 is therefore marked partial, not done.
+
+### The first real test suite (closing a gap I'd flagged)
+On Day 6 I found that none of my "verified end-to-end" runs had ever gone through real HTTP + JWT, which is how the UUID auth bug shipped. This is the first day that's fixed: `backend/tests/` is a proper pytest suite (temp SQLite DB + temp storage dir per run, tables recreated per test) that registers real users through the API and calls endpoints with a real `Authorization` header.
+- `test_auth_http.py` (7): protected routes 401 without a token; `/auth/me` works; a garbage token is a 401, not a 500; a refresh token can't be used as an access token; the refresh endpoint issues working tokens; wrong password is rejected; **cross-tenant project access is a 404**.
+- `test_daily_reports_http.py` (9): create/list, one-per-day 409, upload→download byte-for-byte roundtrip, disallowed type 415, oversize 413, empty 400, hostile filename, and another company can neither see the report, download its photo, nor upload to it.
+- Result: **16 passed**. The first run had 2 failures, which turned out to be my own test data (a company name too short for the schema) — I confirmed that from the 422 before changing anything, rather than assuming.
+- Only auth, tenant isolation on projects, and daily reports are covered. Inventory, procurement, finance etc. are still verified only by the earlier ad-hoc scripts; BUILD-127..134 are not done.
+
+### Not built
+BUILD-062 (AI daily-report generation from free text) needs a real LLM integration, which doesn't exist yet.
+
+### Verified
+`pytest`: 16 passed. Frontend `tsc --noEmit`: clean. Not yet checked in a browser this session, and still not run against live Postgres.
+
+### Correction to earlier days' "verified" claims
+The local SQLite dev database (`backend/buildos_dev.db`) was created once and never refreshed as models were added, so from Day 8 on it lacked the tables for suppliers, procurement, finance, workforce, equipment and (now) daily reports. On Days 8–11 I told the user those pages "should work now" — against their running instance they would have failed with "no such table". My checks all used fresh in-memory databases and never touched the live one. Found on Day 12 by listing the tables (11 of 28 present), fixed by re-running `scripts/init_sqlite_dev_db.py` (`create_all` only adds missing tables, so existing data was preserved), and then verified against the **live** server: all 15 module list endpoints return 200 with a real login, and a project → daily report → photo upload → download → bad-type-rejected (415) round trip works. Lesson: after adding models, re-run the init script before claiming the running app works, and smoke-test the live server, not just a scratch database.
+
+### Next (Day 13 — Documents)
+- BUILD-072..075 document upload, categories, download, metadata (reuses the storage layer above)
+- Then decide how to handle the AI epics honestly: they need a real LLM key and network access, which I haven't confirmed exist here

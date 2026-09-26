@@ -29,11 +29,12 @@ import {
   useUpdateTaskStatus,
 } from "@/lib/use-tasks";
 import { useCreateExpense, useProjectCostSummary, useProjectExpenses } from "@/lib/use-finance";
+import { DailyReportsPanel } from "@/components/daily-reports-panel";
 import { formatCurrency, STATUS_CLASSES, STATUS_LABELS } from "@/lib/utils";
 import type { TaskStatus } from "@/lib/task-types";
 import type { BoqAiGeneratedItem } from "@/lib/boq-types";
 
-const TABS = ["Overview", "BOQ", "Tasks", "Milestones", "Members", "Costs"] as const;
+const TABS = ["Overview", "BOQ", "Tasks", "Milestones", "Members", "Costs", "Reports"] as const;
 type Tab = (typeof TABS)[number];
 
 const TASK_STATUS_OPTIONS: TaskStatus[] = ["todo", "in_progress", "blocked", "done"];
@@ -164,6 +165,7 @@ export default function ProjectDetailPage() {
           {tab === "Milestones" && <MilestonesPanel projectId={id} milestones={milestones ?? []} />}
           {tab === "Members" && <MembersPanel members={members ?? []} />}
           {tab === "Costs" && <CostsPanel projectId={id} />}
+          {tab === "Reports" && <DailyReportsPanel projectId={id} />}
         </div>
       )}
     </AppShell>
