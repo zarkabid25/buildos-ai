@@ -128,13 +128,13 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [ ] BUILD-091 AI risk explanation
 
 ## Epic 18 — Scheduling
-- [ ] BUILD-092 Project schedule
-- [ ] BUILD-093 Tasks with dependencies
-- [ ] BUILD-094 Milestones
-- [ ] BUILD-095 Progress tracking
-- [ ] BUILD-096 Basic Gantt
-- [ ] BUILD-097 Schedule variance
-- [ ] BUILD-098 AI delay analysis
+- [x] BUILD-092 Project schedule
+- [x] BUILD-093 Tasks with dependencies (cycle detection included)
+- [x] BUILD-094 Milestones (built Day 4; shown on the schedule timeline)
+- [x] BUILD-095 Progress tracking (Project.progress_percent, built Day 3)
+- [x] BUILD-096 Basic Gantt (CSS timeline bars, no drag/resize)
+- [x] BUILD-097 Schedule variance (elapsed-vs-progress, in days and percent)
+- [ ] BUILD-098 AI delay analysis (needs the real LLM connection from Day 14 to be tested)
 
 ## Epic 19 — Notifications
 - [ ] BUILD-099 Notification system

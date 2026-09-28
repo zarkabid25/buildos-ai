@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import type { Milestone, ProjectHealth, ProjectMember, Task, TaskStatus } from "@/lib/task-types";
+import type {
+  Milestone,
+  ProjectHealth,
+  ProjectMember,
+  ProjectSchedule,
+  Task,
+  TaskStatus,
+} from "@/lib/task-types";
 
 export function useTasks(projectId: string) {
   const { accessToken } = useAuth();
@@ -16,11 +23,54 @@ export function useCreateTask(projectId: string) {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { title: string; priority?: string; due_date?: string }) =>
+    mutationFn: (input: { title: string; priority?: string; start_date?: string; due_date?: string }) =>
       api.post<Task>(`/projects/${projectId}/tasks`, input, accessToken ?? undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects", projectId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "schedule"] });
     },
+  });
+}
+
+export function useAddDependency(projectId: string) {
+  const { accessToken } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, dependsOnTaskId }: { taskId: string; dependsOnTaskId: string }) =>
+      api.post<Task>(
+        `/projects/${projectId}/tasks/${taskId}/dependencies`,
+        { depends_on_task_id: dependsOnTaskId },
+        accessToken ?? undefined
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "schedule"] });
+    },
+  });
+}
+
+export function useRemoveDependency(projectId: string) {
+  const { accessToken } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, dependsOnTaskId }: { taskId: string; dependsOnTaskId: string }) =>
+      api.delete<void>(
+        `/projects/${projectId}/tasks/${taskId}/dependencies/${dependsOnTaskId}`,
+        accessToken ?? undefined
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "schedule"] });
+    },
+  });
+}
+
+export function useProjectSchedule(projectId: string) {
+  const { accessToken } = useAuth();
+  return useQuery({
+    queryKey: ["projects", projectId, "schedule"],
+    queryFn: () => api.get<ProjectSchedule>(`/projects/${projectId}/schedule`, accessToken ?? undefined),
+    enabled: !!accessToken && !!projectId,
   });
 }
 
@@ -32,6 +82,7 @@ export function useUpdateTaskStatus(projectId: string) {
       api.patch<Task>(`/projects/${projectId}/tasks/${taskId}`, { status }, accessToken ?? undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects", projectId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "schedule"] });
     },
   });
 }

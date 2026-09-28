@@ -17,6 +17,7 @@ from app.api.v1 import (
     procurement,
     project_members,
     projects,
+    schedule,
     suppliers,
     tasks,
     warehouses,
@@ -44,3 +45,4 @@ api_router.include_router(equipment.router)
 api_router.include_router(daily_reports.router)
 api_router.include_router(ai.router)
 api_router.include_router(documents.router)
+api_router.include_router(schedule.router)

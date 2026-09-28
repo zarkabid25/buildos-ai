@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import TaskPriority, TaskStatus
 
@@ -11,6 +11,7 @@ class TaskBase(BaseModel):
     description: str | None = None
     assignee_id: uuid.UUID | None = None
     priority: TaskPriority = TaskPriority.MEDIUM
+    start_date: date | None = None
     due_date: date | None = None
 
 
@@ -24,6 +25,7 @@ class TaskUpdate(BaseModel):
     assignee_id: uuid.UUID | None = None
     priority: TaskPriority | None = None
     status: TaskStatus | None = None
+    start_date: date | None = None
     due_date: date | None = None
 
 
@@ -35,3 +37,25 @@ class TaskRead(TaskBase):
     status: TaskStatus
     created_at: datetime
     updated_at: datetime
+    depends_on: list[uuid.UUID] = Field(default_factory=list)
+
+
+class TaskDependencyCreate(BaseModel):
+    depends_on_task_id: uuid.UUID
+
+
+class ScheduleMilestone(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    due_date: date | None
+    is_completed: bool
+
+
+class ProjectSchedule(BaseModel):
+    tasks: list[TaskRead]
+    milestones: list[ScheduleMilestone]
+    schedule_variance_percent: int | None
+    schedule_variance_days: int | None
+    variance_note: str

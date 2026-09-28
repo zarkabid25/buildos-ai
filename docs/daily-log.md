@@ -428,3 +428,22 @@ Nothing has run against the real Claude API. Unknown until a key is added: wheth
 
 ### Next
 Set an API key and verify against the real model (highest value), then the non-AI gaps: scheduling/Gantt, notifications, search, settings, reports, UX polish, security hardening, deployment.
+
+---
+
+## Day 15 — 2026-09-29 — Scheduling: dependencies, variance, a basic Gantt (BUILD-092..097)
+
+### Done
+- **BUILD-093** Tasks with dependencies: `TaskDependency` join table (`task_id` cannot start until `depends_on_task_id` is done). Cycle detection is a real graph check, not just "not itself": adding `A -> B` is rejected if `B` already (directly or transitively) depends on `A`, walked via `_depends_transitively()`. Same-project and same-company checks reuse `get_task`, so a dependency can't reach into another project or company.
+- **BUILD-092/096** Project schedule + basic Gantt: `Task` gets a `start_date` column (it only had `due_date` before). `GET /projects/{id}/schedule` returns tasks, milestones, and the variance below in one call. Frontend: a new **Schedule** tab renders task bars and milestone diamonds positioned by date with plain CSS (no charting library) — colored by task status, a dependency add/remove UI underneath. No drag-to-reschedule or zoom; it's a read view plus a simple form, which is what "basic" means here.
+- **BUILD-097** Schedule variance: reused the elapsed-vs-progress math from the Day 3 at-risk heuristic and the Day 9 project health score (same formula, no new logic invented), but made it public (`project_service.get_schedule_variance_percent`, previously a private helper only `_is_at_risk`/`get_health` could see) and added a days version (`get_schedule_variance_days`) so the UI can say "40 days behind" instead of a bare percentage.
+- **BUILD-094/095** Milestones and progress tracking were already built (Day 4, Day 3) — marked done in the tracker rather than left unchecked now that the schedule view actually surfaces them together.
+- Not built: **BUILD-098 AI delay analysis** needs the real LLM connection from Day 14, which is still unverified against the live API.
+
+### Verified end-to-end
+- Fresh venv install, full suite: **70 passed** (12 new: start/due dates round-trip, add/remove a dependency, self-dependency rejected, duplicate dependency rejected (409), a direct 2-node cycle rejected, an indirect 3-node cycle rejected, cross-project and cross-company dependency targets rejected (404), schedule with no dates has no variance, schedule variance hand-checked against a concrete scenario (100-day project, day 50, 20% progress → 30 points / 30 days behind), milestones appear on the schedule, tenant isolation on the schedule endpoint).
+- **Mutation check on the part most likely to be subtly wrong** (cycle detection, not the simpler CRUD): removed the `_depends_transitively` guard, confirmed both cycle tests failed (`201` instead of `400`) rather than passing vacuously, restored the code, confirmed both pass again.
+- Live server: same lesson as Day 12/14 applied again — `create_all` only adds missing *tables*, not columns to a table that already existed (`tasks` predates today), so I had to `ALTER TABLE tasks ADD COLUMN start_date` by hand on the dev DB before restarting, or every task create would have 500'd on the live server despite all tests passing. Caught this before it became a repeat of the Day 12 mistake, not after. Then: created a project with real dates, added a dependency, confirmed the cycle-closing attempt is rejected with the exact error message, and hand-verified the schedule math against the running server (58/90 days elapsed → 64%, minus 20% progress = 44% / 40 days behind — matches by hand). Frontend `/projects` compiles and serves 200 with the new Schedule tab; no errors in the dev server log.
+
+### Next
+Notifications, search, settings, reports, UX polish, security hardening, deployment — or verifying the AI layer against a real API key if one becomes available.

@@ -9,9 +9,19 @@ export interface Task {
   assignee_id: string | null;
   priority: TaskPriority;
   status: TaskStatus;
+  start_date: string | null;
   due_date: string | null;
   created_at: string;
   updated_at: string;
+  depends_on: string[];
+}
+
+export interface ProjectSchedule {
+  tasks: Task[];
+  milestones: { id: string; name: string; due_date: string | null; is_completed: boolean }[];
+  schedule_variance_percent: number | null;
+  schedule_variance_days: number | null;
+  variance_note: string;
 }
 
 export interface Milestone {

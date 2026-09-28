@@ -15,9 +15,10 @@ from app.schemas.project import ProjectCreate, ProjectHealth, ProjectSummary, Pr
 SCHEDULE_RISK_THRESHOLD = 15
 
 
-def _schedule_variance_percent(project: Project, today: date) -> int | None:
-    """Elapsed schedule % minus reported progress %. None if there isn't enough
-    data (no dates, or not yet started) to compute a variance."""
+def get_schedule_variance_percent(project: Project, today: date) -> int | None:
+    """Elapsed schedule % minus reported progress %. Positive means behind
+    schedule (more time has elapsed than work reported done); negative means
+    ahead. None if there isn't enough data (no dates, or not yet started)."""
     if not project.start_date or not project.end_date:
         return None
     total_days = (project.end_date - project.start_date).days
@@ -30,10 +31,20 @@ def _schedule_variance_percent(project: Project, today: date) -> int | None:
     return elapsed_percent - project.progress_percent
 
 
+def get_schedule_variance_days(project: Project, today: date) -> int | None:
+    """The variance above, expressed in days of the project's own timeline
+    rather than percentage points, so it reads as "6 days behind" not "8%"."""
+    variance_percent = get_schedule_variance_percent(project, today)
+    if variance_percent is None:
+        return None
+    total_days = (project.end_date - project.start_date).days
+    return round(variance_percent / 100 * total_days)
+
+
 def _is_at_risk(project: Project, today: date) -> bool:
     if project.status != ProjectStatus.ACTIVE:
         return False
-    variance = _schedule_variance_percent(project, today)
+    variance = get_schedule_variance_percent(project, today)
     return variance is not None and variance > SCHEDULE_RISK_THRESHOLD
 
 
@@ -116,7 +127,7 @@ def get_summary(db: Session, company_id: uuid.UUID) -> ProjectSummary:
 
 def get_health(db: Session, company_id: uuid.UUID, project_id: uuid.UUID) -> ProjectHealth:
     project = get_project(db, company_id, project_id)
-    variance = _schedule_variance_percent(project, date.today())
+    variance = get_schedule_variance_percent(project, date.today())
 
     schedule_score = None if variance is None else max(0, min(100, 100 - max(0, variance) * 2))
 

@@ -7,7 +7,7 @@ from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
+from app.schemas.task import TaskCreate, TaskDependencyCreate, TaskRead, TaskUpdate
 from app.services import task_service
 
 router = APIRouter(prefix="/projects/{project_id}/tasks", tags=["tasks"])
@@ -55,3 +55,27 @@ def delete_task(
     db: Session = Depends(get_db),
 ) -> None:
     task_service.delete_task(db, current_user.company_id, project_id, task_id)
+
+
+@router.post("/{task_id}/dependencies", response_model=TaskRead, status_code=201)
+def add_dependency(
+    project_id: uuid.UUID,
+    task_id: uuid.UUID,
+    payload: TaskDependencyCreate,
+    current_user: User = Depends(require_roles(*CAN_WRITE)),
+    db: Session = Depends(get_db),
+) -> TaskRead:
+    return task_service.add_dependency(
+        db, current_user.company_id, project_id, task_id, payload.depends_on_task_id
+    )
+
+
+@router.delete("/{task_id}/dependencies/{depends_on_task_id}", status_code=204)
+def remove_dependency(
+    project_id: uuid.UUID,
+    task_id: uuid.UUID,
+    depends_on_task_id: uuid.UUID,
+    current_user: User = Depends(require_roles(*CAN_WRITE)),
+    db: Session = Depends(get_db),
+) -> None:
+    task_service.remove_dependency(db, current_user.company_id, project_id, task_id, depends_on_task_id)

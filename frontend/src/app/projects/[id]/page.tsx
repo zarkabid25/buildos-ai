@@ -30,11 +30,12 @@ import {
 } from "@/lib/use-tasks";
 import { useCreateExpense, useProjectCostSummary, useProjectExpenses } from "@/lib/use-finance";
 import { DailyReportsPanel } from "@/components/daily-reports-panel";
+import { SchedulePanel } from "@/components/schedule-panel";
 import { formatCurrency, STATUS_CLASSES, STATUS_LABELS } from "@/lib/utils";
 import type { TaskStatus } from "@/lib/task-types";
 import type { BoqAiGeneratedItem } from "@/lib/boq-types";
 
-const TABS = ["Overview", "BOQ", "Tasks", "Milestones", "Members", "Costs", "Reports"] as const;
+const TABS = ["Overview", "BOQ", "Tasks", "Schedule", "Milestones", "Members", "Costs", "Reports"] as const;
 type Tab = (typeof TABS)[number];
 
 const TASK_STATUS_OPTIONS: TaskStatus[] = ["todo", "in_progress", "blocked", "done"];
@@ -162,6 +163,7 @@ export default function ProjectDetailPage() {
 
           {tab === "BOQ" && <BoqPanel projectId={id} />}
           {tab === "Tasks" && <TasksPanel projectId={id} tasks={tasks ?? []} />}
+          {tab === "Schedule" && <SchedulePanel projectId={id} />}
           {tab === "Milestones" && <MilestonesPanel projectId={id} milestones={milestones ?? []} />}
           {tab === "Members" && <MembersPanel members={members ?? []} />}
           {tab === "Costs" && <CostsPanel projectId={id} />}
@@ -174,23 +176,46 @@ export default function ProjectDetailPage() {
 
 function TasksPanel({ projectId, tasks }: { projectId: string; tasks: import("@/lib/task-types").Task[] }) {
   const [title, setTitle] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [dueDate, setDueDate] = useState("");
   const createTask = useCreateTask(projectId);
   const updateStatus = useUpdateTaskStatus(projectId);
 
   async function handleAdd() {
     if (!title.trim()) return;
-    await createTask.mutateAsync({ title: title.trim() });
+    await createTask.mutateAsync({
+      title: title.trim(),
+      start_date: startDate || undefined,
+      due_date: dueDate || undefined,
+    });
     setTitle("");
+    setStartDate("");
+    setDueDate("");
   }
 
   return (
     <Card>
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         <Input
           placeholder="New task title"
+          className="flex-1"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+        />
+        <Input
+          type="date"
+          title="Start date"
+          className="w-40"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+        />
+        <Input
+          type="date"
+          title="Due date"
+          className="w-40"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
         />
         <Button onClick={handleAdd} disabled={createTask.isPending}>
           Add
@@ -203,7 +228,9 @@ function TasksPanel({ projectId, tasks }: { projectId: string; tasks: import("@/
             <div>
               <div className="text-sm text-ink">{task.title}</div>
               <div className="text-xs text-muted">
-                {task.priority} {task.due_date ? `· due ${task.due_date}` : ""}
+                {task.priority}
+                {task.start_date ? ` · starts ${task.start_date}` : ""}
+                {task.due_date ? ` · due ${task.due_date}` : ""}
               </div>
             </div>
             <select
