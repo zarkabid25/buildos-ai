@@ -141,8 +141,8 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [x] BUILD-100 Notification center (bell dropdown in the topbar, polls every 30s)
 
 ## Epic 20 — Search
-- [ ] BUILD-101 Global search
-- [ ] BUILD-102 AI semantic search
+- [x] BUILD-101 Global search (case-insensitive substring, 7 entity types, topbar dropdown)
+- [ ] BUILD-102 AI semantic search (needs an embeddings provider decision, see Day 14)
 
 ## Epic 21 — Settings
 - [ ] BUILD-103 Company settings

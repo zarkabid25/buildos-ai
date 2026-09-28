@@ -474,3 +474,22 @@ No "invite a colleague" flow exists yet (Epic 12 doesn't have one either) — th
 
 ### Next
 Search, settings, reports, UX polish, security hardening, deployment remain. Or verify the AI layer against a real API key if one becomes available.
+
+---
+
+## Day 17 — 2026-10-01 — Global search (BUILD-101)
+
+### Done
+- **BUILD-101** Global search: `GET /search?q=` does case-insensitive substring matching across projects (name/code/client), tasks (title), materials (name/sku), suppliers (name), purchase orders (number), documents (title/filename), and employees (name/designation) — 7 entity types in one call, each result carrying a link to where it actually lives in the app. Uses `.ilike()`, which SQLAlchemy compiles to a `LOWER()`-based comparison on backends without native `ILIKE` (SQLite), so it behaves the same on SQLite here and Postgres in production. No new table, no migration — it's a pure read over existing data.
+- Below a 2-character query, or no query at all, it returns an empty result rather than doing a full-table scan.
+- Frontend: the topbar's static "Search..." placeholder (there since Day 1) is now a real debounced (250ms) search box with a grouped dropdown, replacing the last piece of the shell that was still decorative rather than functional.
+- **BUILD-102** (AI semantic search) not built — same reason as everything else AI: needs an embeddings provider decision that hasn't been made (Day 14).
+
+### Verified end-to-end
+- Fresh venv, full suite: **95 passed** (13 new — one per entity type, case-insensitivity, cross-type results in one query summing correctly in `total`, the below-minimum-length guard, a clean empty result with no error, and tenant isolation).
+- **Mutation check on the highest-stakes property in a feature that spans 7 tables**: removed the `company_id` filter from the project search branch. The isolation test caught it immediately and concretely — `assert 'Company A Secret Tower' not in [...]` failed because it *was* in Company B's results. Restored, confirmed the full file (13/13) and the isolation test individually both pass again.
+- Live: searched the real dev database for "cement" and got exactly the three real Cement-named materials that exist there (from this week's testing) with correct subtitles: no fabricated or stale results. Confirmed the 1-character and empty-query guards both correctly return zero results without erroring. Frontend `tsc --noEmit` clean; `/dashboard` and `/projects` both serve 200 with no errors in the dev server log.
+- Note: the previous session ended mid-turn (background dev servers were killed when it did); this session started by confirming nothing was still listening on 8000/3000, then started both fresh rather than assuming stale state was still good.
+
+### Next
+Settings, reports, UX polish, security hardening, deployment remain. Or verify the AI layer against a real API key if one becomes available.

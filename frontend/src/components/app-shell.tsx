@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { GlobalSearch } from "@/components/global-search";
 import { NotificationBell } from "@/components/notification-bell";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -121,7 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-6">
-          <div className="text-sm text-muted">Search...</div>
+          <GlobalSearch />
           <div className="flex items-center gap-3">
             <NotificationBell />
             <span className="text-sm font-medium">{user?.full_name ?? ""}</span>

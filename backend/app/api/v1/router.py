@@ -19,6 +19,7 @@ from app.api.v1 import (
     project_members,
     projects,
     schedule,
+    search,
     suppliers,
     tasks,
     warehouses,
@@ -48,3 +49,4 @@ api_router.include_router(ai.router)
 api_router.include_router(documents.router)
 api_router.include_router(schedule.router)
 api_router.include_router(notifications.router)
+api_router.include_router(search.router)
