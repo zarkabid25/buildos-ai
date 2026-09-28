@@ -3,8 +3,10 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.models.enums import NotificationType
 from app.models.task import Task, TaskDependency
 from app.schemas.task import TaskCreate, TaskUpdate
+from app.services import notification_service
 from app.services.project_service import get_project
 
 
@@ -30,22 +32,56 @@ def get_task(db: Session, company_id: uuid.UUID, project_id: uuid.UUID, task_id:
 
 
 def create_task(
-    db: Session, company_id: uuid.UUID, project_id: uuid.UUID, payload: TaskCreate
+    db: Session, company_id: uuid.UUID, project_id: uuid.UUID, actor_id: uuid.UUID, payload: TaskCreate
 ) -> Task:
-    get_project(db, company_id, project_id)
+    project = get_project(db, company_id, project_id)
     task = Task(company_id=company_id, project_id=project_id, **payload.model_dump())
     db.add(task)
+    db.flush()
+
+    if task.assignee_id and task.assignee_id != actor_id:
+        notification_service.create_notification(
+            db, company_id, task.assignee_id, NotificationType.TASK_ASSIGNED,
+            title=f"You were assigned: {task.title}",
+            body=f"Project: {project.name}",
+            link=f"/projects/{project_id}",
+        )
+
     db.commit()
     db.refresh(task)
     return task
 
 
 def update_task(
-    db: Session, company_id: uuid.UUID, project_id: uuid.UUID, task_id: uuid.UUID, payload: TaskUpdate
+    db: Session,
+    company_id: uuid.UUID,
+    project_id: uuid.UUID,
+    task_id: uuid.UUID,
+    actor_id: uuid.UUID,
+    payload: TaskUpdate,
 ) -> Task:
     task = get_task(db, company_id, project_id, task_id)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    previous_assignee = task.assignee_id
+
+    for field, value in updates.items():
         setattr(task, field, value)
+
+    newly_assigned = (
+        "assignee_id" in updates
+        and task.assignee_id
+        and task.assignee_id != previous_assignee
+        and task.assignee_id != actor_id
+    )
+    if newly_assigned:
+        project = get_project(db, company_id, project_id)
+        notification_service.create_notification(
+            db, company_id, task.assignee_id, NotificationType.TASK_ASSIGNED,
+            title=f"You were assigned: {task.title}",
+            body=f"Project: {project.name}",
+            link=f"/projects/{project_id}",
+        )
+
     db.commit()
     db.refresh(task)
     return task

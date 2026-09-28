@@ -137,8 +137,8 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [ ] BUILD-098 AI delay analysis (needs the real LLM connection from Day 14 to be tested)
 
 ## Epic 19 — Notifications
-- [ ] BUILD-099 Notification system
-- [ ] BUILD-100 Notification center
+- [x] BUILD-099 Notification system (4 real triggers: task assignment, material request, PO, AI proposal)
+- [x] BUILD-100 Notification center (bell dropdown in the topbar, polls every 30s)
 
 ## Epic 20 — Search
 - [ ] BUILD-101 Global search

@@ -31,7 +31,7 @@ def create_task(
     current_user: User = Depends(require_roles(*CAN_WRITE)),
     db: Session = Depends(get_db),
 ) -> TaskRead:
-    return task_service.create_task(db, current_user.company_id, project_id, payload)
+    return task_service.create_task(db, current_user.company_id, project_id, current_user.id, payload)
 
 
 @router.patch("/{task_id}", response_model=TaskRead)
@@ -44,7 +44,7 @@ def update_task(
 ) -> TaskRead:
     # Any project member can update task status (e.g. move to done); field-level
     # restrictions beyond that are out of scope for the MVP task board.
-    return task_service.update_task(db, current_user.company_id, project_id, task_id, payload)
+    return task_service.update_task(db, current_user.company_id, project_id, task_id, current_user.id, payload)
 
 
 @router.delete("/{task_id}", status_code=204)

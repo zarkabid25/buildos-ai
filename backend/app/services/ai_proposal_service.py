@@ -6,14 +6,24 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.ai import AiProposal
-from app.models.enums import AiProposalStatus, AiProposalType
+from app.models.enums import AiProposalStatus, AiProposalType, NotificationType, UserRole
 from app.models.user import User
 from app.schemas.procurement import MaterialRequestCreate, MaterialRequestItemInput
-from app.services import procurement_service
+from app.services import notification_service, procurement_service
 from app.services.material_service import get_material
 from app.services.project_service import get_project
 
 MAX_PROPOSAL_ITEMS = 30
+
+# Mirrors CAN_DECIDE in app/api/v1/ai.py -- whoever can approve/reject an AI
+# proposal there is who gets told a new one is waiting.
+DECIDER_ROLES = (
+    UserRole.SUPER_ADMIN,
+    UserRole.COMPANY_ADMIN,
+    UserRole.PROJECT_MANAGER,
+    UserRole.SITE_ENGINEER,
+    UserRole.STOREKEEPER,
+)
 
 
 def create_material_request_proposal(
@@ -59,6 +69,15 @@ def create_material_request_proposal(
         created_by_id=user.id,
     )
     db.add(proposal)
+
+    notification_service.notify_users_with_roles(
+        db, company_id, DECIDER_ROLES, NotificationType.AI_PROPOSAL_PENDING,
+        title="AI drafted a material request",
+        body=proposal.summary,
+        link="/ai",
+        exclude_user_id=user.id,
+    )
+
     db.commit()
     db.refresh(proposal)
     return proposal

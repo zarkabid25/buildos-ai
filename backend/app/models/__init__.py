@@ -13,6 +13,7 @@ from app.models.enums import (  # noqa: F401
     DocumentCategory,
     AiProposalType,
     AiProposalStatus,
+    NotificationType,
 )
 from app.models.project import Project  # noqa: F401
 from app.models.project_member import ProjectMember  # noqa: F401
@@ -34,6 +35,7 @@ from app.models.equipment import Equipment, EquipmentMaintenance  # noqa: F401
 from app.models.daily_report import DailyReport, DailyReportPhoto  # noqa: F401
 from app.models.document import Document  # noqa: F401
 from app.models.ai import AiConversation, AiMessage, AiProposal  # noqa: F401
+from app.models.notification import Notification  # noqa: F401
 from app.models.material import MaterialCategory, Material  # noqa: F401
 from app.models.warehouse import Warehouse  # noqa: F401
 from app.models.inventory_transaction import InventoryTransaction  # noqa: F401

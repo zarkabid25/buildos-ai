@@ -4,7 +4,13 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.enums import InventoryTransactionType, MaterialRequestStatus, PurchaseOrderStatus
+from app.models.enums import (
+    InventoryTransactionType,
+    MaterialRequestStatus,
+    NotificationType,
+    PurchaseOrderStatus,
+    UserRole,
+)
 from app.models.inventory_transaction import InventoryTransaction
 from app.models.procurement import (
     GoodsReceipt,
@@ -19,10 +25,15 @@ from app.schemas.procurement import (
     MaterialRequestCreate,
     PurchaseOrderCreate,
 )
+from app.services import notification_service
 from app.services.material_service import get_material
 from app.services.project_service import get_project
 from app.services.supplier_service import get_supplier
 from app.services.warehouse_service import get_warehouse
+
+# Mirrors CAN_APPROVE in app/api/v1/procurement.py -- whoever can approve a
+# material request or PO there is who gets notified here when one needs review.
+APPROVER_ROLES = (UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.PROJECT_MANAGER)
 
 # ---- Material requests ----------------------------------------------------
 
@@ -74,6 +85,15 @@ def create_material_request(
                 quantity=item.quantity,
             )
         )
+
+    notification_service.notify_users_with_roles(
+        db, company_id, APPROVER_ROLES, NotificationType.MATERIAL_REQUEST_PENDING,
+        title="New material request needs review",
+        body=f"{len(payload.items)} item(s) requested.",
+        link="/procurement",
+        exclude_user_id=user_id,
+    )
+
     db.commit()
     db.refresh(req)
     return req
@@ -157,6 +177,14 @@ def create_purchase_order(
         req = get_material_request(db, company_id, payload.material_request_id)
         if req.status == MaterialRequestStatus.PENDING:
             req.status = MaterialRequestStatus.CONVERTED
+
+    notification_service.notify_users_with_roles(
+        db, company_id, APPROVER_ROLES, NotificationType.PURCHASE_ORDER_PENDING,
+        title=f"{po.po_number} needs approval",
+        body=f"Total: {sum(i.quantity * i.rate for i in po.items):,.0f}",
+        link="/procurement",
+        exclude_user_id=user_id,
+    )
 
     db.commit()
     db.refresh(po)

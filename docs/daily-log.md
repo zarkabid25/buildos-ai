@@ -447,3 +447,30 @@ Set an API key and verify against the real model (highest value), then the non-A
 
 ### Next
 Notifications, search, settings, reports, UX polish, security hardening, deployment — or verifying the AI layer against a real API key if one becomes available.
+
+---
+
+## Day 16 — 2026-09-30 — Notifications: 4 real triggers, not a static bell (BUILD-099, 100)
+
+### Done
+- **BUILD-099** Notification system: `Notification` model (recipient, type, title, body, an in-app link, read state). `notify_users_with_roles()` fans out one row per matching active user in the company, excluding whoever triggered the event — nobody gets told about their own action. Wired into four real events, each mirroring the exact role set the corresponding API endpoint already restricts writes to (so "who gets notified" always matches "who's actually allowed to act"):
+  - **Task assigned** — `task_service.create_task`/`update_task` now take the acting user's id, and only fire when the assignee changes *and* isn't the actor. Reassigning doesn't double-notify the old assignee.
+  - **Material request submitted** — notifies the same roles that can approve one (`procurement.py`'s `CAN_APPROVE`, mirrored as `APPROVER_ROLES` in the service since API-layer role tuples shouldn't be imported into the service layer).
+  - **Purchase order created** — same approver set, title includes the PO number.
+  - **AI proposal drafted** — notifies the same roles that can approve/reject a proposal (`ai.py`'s `CAN_DECIDE`), so the Day 14 draft-and-approve loop now actually tells someone there's something to review instead of relying on them checking `/ai` unprompted.
+- **BUILD-100** Notification center: a bell in the topbar (`components/notification-bell.tsx`) — unread badge (polls every 30s), dropdown list, click-to-navigate-and-mark-read, mark-all-read. Unread rows are visibly highlighted.
+
+### A real bug I found in my own test, and fixed the test instead of hiding it
+My first mutation check targeted the wrong thing: I removed the self-notify guard from `update_task` and both "self-notify" tests still passed — because neither one actually exercised self-assignment *via* `PATCH` (one used `create_task`, the other reassigned to a *different* person). The mutation passed vacuously; it proved nothing. Added `test_self_assigning_via_update_does_not_self_notify`, reran the same mutation, and this time it correctly failed (`assert [...] == []` with a leaked notification) before I restored the guard. Recording this because "the mutation check passed" is only meaningful if you first confirm the test you're relying on can actually fail — I didn't check that the first time, and it would have shipped a false sense of coverage.
+
+### A flake, reported honestly rather than either ignored or oversold
+The full 82-test suite failed once, on the very first complete run today, with `AttributeError: 'float' object has no attribute 'replace'` inside `uuid.UUID()`, in `test_ai_copilot_http.py::test_bad_proposals...[bad_id]` — a test file I didn't touch today. It did not reproduce: not in isolation, not re-running that whole file (25/25), not in a 3-file subset with today's new tests, and not on a full clean rerun (82/82). I looked for an unstr'd `uuid.UUID()` call that could explain a stray float and didn't find one that fits the failing test's code path. I'm not claiming to have fixed this — I don't have a diagnosis, only a single non-reproducing occurrence. Flagging it here instead of either quietly rerunning until green (which is how flaky-but-real bugs get shipped) or claiming a fix I can't justify.
+
+### Verified live, and found a self-inflicted bug in my own verification method along the way
+To test a second-user scenario against the running server, there's no "invite a teammate" endpoint yet, so I inserted a second user directly into the dev SQLite database. My first attempt used raw `sqlite3` with a manually formatted UUID string, and login worked but `/auth/me` then failed with "Invalid or expired token" — a real bug, but in my test setup, not the product: SQLAlchemy's UUID type on SQLite serializes differently (no dashes) than a hand-written UUID string (with dashes), so a row written by raw SQL doesn't match what a subsequent ORM query for that same id looks for — the exact same category of type-coercion mismatch as the Day 6 enum bug, just self-inflicted this time via my own shortcut rather than shipped code. Fixed by inserting through the ORM (`SessionLocal` + `User(...)`) instead, which is also what the test suite's `make_user_in_company` helper already does correctly. Once fixed: task assignment, material request, and PO notifications all confirmed correct against the live server (right recipient, right exclusion, right title/link), plus mark-all-read.
+
+### Not built
+No "invite a colleague" flow exists yet (Epic 12 doesn't have one either) — the only way a second real user joins a company today is a developer/admin action, not a self-serve UI flow. Real-time push (websocket/SSE) isn't built; the bell polls every 30 seconds instead.
+
+### Next
+Search, settings, reports, UX polish, security hardening, deployment remain. Or verify the AI layer against a real API key if one becomes available.

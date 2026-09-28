@@ -89,3 +89,10 @@ class AiProposalStatus(str, enum.Enum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+
+
+class NotificationType(str, enum.Enum):
+    TASK_ASSIGNED = "task_assigned"
+    MATERIAL_REQUEST_PENDING = "material_request_pending"
+    PURCHASE_ORDER_PENDING = "purchase_order_pending"
+    AI_PROPOSAL_PENDING = "ai_proposal_pending"
