@@ -33,7 +33,7 @@ from app.models.expense import ExpenseCategory, Expense  # noqa: F401
 from app.models.workforce import Employee, EmployeeProjectAssignment, Attendance  # noqa: F401
 from app.models.equipment import Equipment, EquipmentMaintenance  # noqa: F401
 from app.models.daily_report import DailyReport, DailyReportPhoto  # noqa: F401
-from app.models.document import Document  # noqa: F401
+from app.models.document import Document, DocumentChunk  # noqa: F401
 from app.models.ai import AiConversation, AiMessage, AiProposal  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
 from app.models.material import MaterialCategory, Material  # noqa: F401

@@ -106,11 +106,11 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [x] BUILD-075 Document metadata
 
 ## Epic 15 — AI Document Intelligence
-- [ ] BUILD-076 Document text extraction
-- [ ] BUILD-077 Document chunking
+- [x] BUILD-076 Document text extraction (PDF text layer, .docx, .xlsx, .txt, .csv; scans/images reported as not searchable; no OCR)
+- [x] BUILD-077 Document chunking (~900-char passages on paragraph/sentence breaks, 150-char overlap, page numbers kept)
 - [ ] BUILD-078 Embeddings
 - [ ] BUILD-079 Vector storage
-- [ ] BUILD-080 RAG search
+- [~] BUILD-080 RAG search (keyword search over passages works, in the UI and as an AI tool; meaning-based retrieval waits on embeddings, 078/079)
 - [ ] BUILD-081 Document Q&A
 
 ## Epic 16 — AI Copilot

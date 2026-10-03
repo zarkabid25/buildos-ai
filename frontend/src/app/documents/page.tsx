@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { useFeedback } from "@/components/feedback";
+import { DocumentSearch } from "@/components/document-search";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,24 @@ function formatSize(bytes: number) {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${bytes} B`;
+}
+
+const TEXT_STATUS: Record<NonNullable<DocumentItem["text_status"]>, { label: string; className: string; hint: string }> = {
+  indexed: { label: "Yes", className: "text-success", hint: "Its text can be searched" },
+  no_text: { label: "No text", className: "text-warning", hint: "No text layer, e.g. a scanned page; it can't be searched" },
+  unsupported: { label: "—", className: "text-muted", hint: "Images and old .doc/.xls files aren't searched" },
+  failed: { label: "Couldn't read", className: "text-danger", hint: "The file couldn't be read for search" },
+};
+
+function TextStatus({ status, pages }: { status: DocumentItem["text_status"]; pages: number | null }) {
+  if (!status) return <span className="text-muted" title="Not indexed yet">Not yet</span>;
+  const s = TEXT_STATUS[status];
+  return (
+    <span className={s.className} title={s.hint}>
+      {s.label}
+      {status === "indexed" && pages ? ` · ${pages} page${pages === 1 ? "" : "s"}` : ""}
+    </span>
+  );
 }
 
 export default function DocumentsPage() {
@@ -81,14 +100,15 @@ export default function DocumentsPage() {
     }
   }
 
-  async function open(doc: DocumentItem, mode: "preview" | "download") {
+  async function open(doc: Pick<DocumentItem, "id" | "original_filename">, mode: "preview" | "download", page?: number | null) {
     if (!accessToken) return;
     setError(null);
     try {
       const blob = await fetchDocumentBlob(doc.id, accessToken, mode === "preview");
       const url = URL.createObjectURL(blob);
       if (mode === "preview") {
-        window.open(url, "_blank", "noopener");
+        // Browsers' PDF viewers open at the given page with #page=N.
+        window.open(page ? `${url}#page=${page}` : url, "_blank", "noopener");
       } else {
         const a = window.document.createElement("a");
         a.href = url;
@@ -192,6 +212,15 @@ export default function DocumentsPage() {
           </select>
         </div>
 
+        <DocumentSearch
+          onOpen={(hit) => {
+            // The list may be filtered to another category; the server decides inline vs download anyway.
+            const doc = documents?.find((d) => d.id === hit.document_id);
+            const mode = !doc || PREVIEWABLE.has(doc.content_type) ? "preview" : "download";
+            open(doc ?? { id: hit.document_id, original_filename: hit.title }, mode, hit.page);
+          }}
+        />
+
         <Card className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead>
@@ -200,6 +229,7 @@ export default function DocumentsPage() {
                 <th className="px-4 py-3 font-medium">Category</th>
                 <th className="px-4 py-3 font-medium">Project</th>
                 <th className="px-4 py-3 font-medium">Size</th>
+                <th className="px-4 py-3 font-medium">Searchable</th>
                 <th className="px-4 py-3 font-medium"></th>
               </tr>
             </thead>
@@ -207,21 +237,21 @@ export default function DocumentsPage() {
               {isLoading &&
                 [0, 1, 2].map((i) => (
                   <tr key={i}>
-                    <td colSpan={5} className="px-4 py-3">
+                    <td colSpan={6} className="px-4 py-3">
                       <Skeleton className="h-5 w-full" />
                     </td>
                   </tr>
                 ))}
               {isError && (
                 <tr>
-                  <td colSpan={5} className="p-3">
+                  <td colSpan={6} className="p-3">
                     <ErrorState error={loadError} onRetry={() => refetch()} />
                   </td>
                 </tr>
               )}
               {!isLoading && !isError && (!documents || documents.length === 0) && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-muted">
+                  <td colSpan={6} className="px-4 py-6 text-center text-muted">
                     No documents yet.
                   </td>
                 </tr>
@@ -235,6 +265,9 @@ export default function DocumentsPage() {
                   <td className="px-4 py-3 text-muted">{doc.category}</td>
                   <td className="px-4 py-3 text-muted">{projectName(doc.project_id)}</td>
                   <td className="px-4 py-3 text-muted">{formatSize(doc.size_bytes)}</td>
+                  <td className="px-4 py-3 text-xs">
+                    <TextStatus status={doc.text_status} pages={doc.page_count} />
+                  </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right text-xs">
                     {PREVIEWABLE.has(doc.content_type) && (
                       <button

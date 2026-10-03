@@ -25,3 +25,20 @@ class DocumentRead(BaseModel):
     size_bytes: int
     uploaded_by_id: uuid.UUID
     created_at: datetime
+    text_status: str | None = None
+    text_chars: int | None = None
+    page_count: int | None = None
+
+
+
+class DocumentSearchHit(BaseModel):
+    """A passage inside a document that matches a search (BUILD-080)."""
+
+    document_id: uuid.UUID
+    title: str
+    category: DocumentCategory
+    project_id: uuid.UUID | None
+    project_name: str | None
+    page: int | None
+    snippet: str
+    terms: list[str]

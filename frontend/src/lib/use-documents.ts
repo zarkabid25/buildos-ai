@@ -33,6 +33,31 @@ export interface DocumentItem {
   content_type: string;
   size_bytes: number;
   created_at: string;
+  text_status: "indexed" | "no_text" | "unsupported" | "failed" | null;
+  page_count: number | null;
+}
+
+export interface DocumentSearchHit {
+  document_id: string;
+  title: string;
+  category: DocumentCategory;
+  project_id: string | null;
+  project_name: string | null;
+  page: number | null;
+  snippet: string;
+  terms: string[];
+}
+
+/** Keyword search inside document text; the caller debounces `q`. */
+export function useDocumentSearch(q: string) {
+  const { accessToken } = useAuth();
+  const term = q.trim();
+  return useQuery({
+    queryKey: ["documents", "search", term],
+    queryFn: () =>
+      api.get<DocumentSearchHit[]>(`/documents/search?q=${encodeURIComponent(term)}`, accessToken ?? undefined),
+    enabled: !!accessToken && term.length >= 2,
+  });
 }
 
 export function useDocuments(category: DocumentCategory | "") {

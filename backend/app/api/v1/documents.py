@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Form, UploadFile
+from fastapi import APIRouter, Depends, Form, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,7 @@ from app.core.storage import IMAGE_TYPES
 from app.db.session import get_db
 from app.models.enums import DocumentCategory, UserRole
 from app.models.user import User
-from app.schemas.document import DocumentRead, DocumentUpdate
+from app.schemas.document import DocumentRead, DocumentSearchHit, DocumentUpdate
 from app.services import document_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -52,6 +52,25 @@ async def upload_document(
     return await document_service.upload_document(
         db, current_user.company_id, current_user.id, file, title, category, project_id, description
     )
+
+
+@router.get("/search", response_model=list[DocumentSearchHit])
+def search_documents(
+    q: str = Query(min_length=2, max_length=200),
+    project_id: uuid.UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[DocumentSearchHit]:
+    return document_service.search_documents(db, current_user.company_id, q, project_id)
+
+
+@router.post("/{document_id}/reindex", response_model=DocumentRead)
+def reindex_document(
+    document_id: uuid.UUID,
+    current_user: User = Depends(require_roles(*CAN_WRITE)),
+    db: Session = Depends(get_db),
+) -> DocumentRead:
+    return document_service.reindex_document(db, current_user.company_id, document_id)
 
 
 @router.get("/{document_id}", response_model=DocumentRead)

@@ -176,8 +176,18 @@ def _list_documents(ctx: ToolContext, args: dict[str, Any]) -> Any:
     docs = document_service.list_documents(
         ctx.db, ctx.company_id, _uuid(args, "project_id", required=False), _enum(DocumentCategory, args, "category")
     )
-    # Metadata only. The assistant can say what exists, not read file contents.
-    return _cap([_pick(d, ["id", "title", "category", "original_filename", "project_id", "description"]) for d in docs])
+    return _cap([
+        _pick(d, ["id", "title", "category", "original_filename", "project_id", "description", "text_status"]) for d in docs
+    ])
+
+
+def _search_documents(ctx: ToolContext, args: dict[str, Any]) -> Any:
+    query = str(args.get("query", "")).strip()
+    if len(query) < 2:
+        raise ToolInputError("query must be at least 2 characters")
+    hits = document_service.search_documents(ctx.db, ctx.company_id, query, _uuid(args, "project_id", required=False), limit=8)
+    # Passages, not whole files: enough to quote and cite (title + page), small enough for the context.
+    return _cap([h.model_dump(mode="json", include={"document_id", "title", "category", "project_name", "page", "snippet"}) for h in hits])
 
 
 def _get_company_insights(ctx: ToolContext, args: dict[str, Any]) -> Any:
@@ -241,11 +251,17 @@ TOOLS: dict[str, Tool] = {
         Tool("list_daily_reports", "The 10 most recent daily site reports for a project. " + _ID_NOTE,
              {"type": "object", "properties": {"project_id": {"type": "string"}}, "required": ["project_id"]},
              _list_daily_reports),
-        Tool("list_documents", "List document metadata (titles, categories, filenames), optionally by project or category. Cannot read file contents.",
+        Tool("list_documents", "List document metadata (titles, categories, filenames, whether text is searchable), optionally by project or category.",
              {"type": "object", "properties": {
                  "project_id": {"type": "string"},
                  "category": {"type": "string", "enum": [e.value for e in DocumentCategory]}}},
              _list_documents),
+        Tool("search_documents",
+             "Keyword search inside the text of uploaded documents (contracts, specs, reports). Returns matching passages "
+             "with document title and page. Quote and cite them; say so if nothing matches. Scanned images aren't searchable.",
+             {"type": "object", "properties": {"query": {"type": "string"}, "project_id": {"type": "string"}},
+              "required": ["query"]},
+             _search_documents),
         Tool("get_company_insights",
              "Rules-based list of current issues across the company (schedule, cost, inventory, equipment, procurement) with supporting numbers.",
              {"type": "object", "properties": {}}, _get_company_insights),
