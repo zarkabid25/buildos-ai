@@ -38,6 +38,7 @@ const NAV_SECTIONS: NavEntry[] = [
       { label: "Suppliers", href: "/suppliers" },
       { label: "Material Requests", href: "/procurement" },
       { label: "Purchase Orders", href: "/procurement" },
+      { label: "RFQs & Quotes", href: "/rfqs" },
     ],
   },
   {
@@ -46,6 +47,7 @@ const NAV_SECTIONS: NavEntry[] = [
       { label: "Budgets", href: "/budgets" },
       { label: "Expenses", href: "/expenses" },
       { label: "Project Costs", href: "/project-costs" },
+      { label: "Payments", href: "/payments" },
     ],
   },
   {

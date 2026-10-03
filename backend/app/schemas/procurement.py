@@ -78,6 +78,8 @@ class PurchaseOrderRead(BaseModel):
     created_at: datetime
     items: list[PurchaseOrderItemRead]
     total_amount: Decimal
+    amount_paid: Decimal
+    payment_status: str
 
 
 class GoodsReceiptItemInput(BaseModel):

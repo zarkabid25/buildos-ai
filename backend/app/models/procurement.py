@@ -66,10 +66,22 @@ class PurchaseOrder(TenantBase):
     po_number: Mapped[str] = mapped_column(String(50), nullable=False)
 
     items: Mapped[list["PurchaseOrderItem"]] = relationship()
+    payments: Mapped[list["SupplierPayment"]] = relationship(viewonly=True, lazy="selectin")  # noqa: F821
 
     @property
     def total_amount(self) -> Decimal:
         return sum((item.amount for item in self.items), Decimal("0"))
+
+    @property
+    def amount_paid(self) -> Decimal:
+        return sum((p.amount for p in self.payments), Decimal("0"))
+
+    @property
+    def payment_status(self) -> str:
+        paid = self.amount_paid
+        if paid <= 0:
+            return "unpaid"
+        return "paid" if paid >= self.total_amount else "partially_paid"
 
 
 class PurchaseOrderItem(TenantBase):

@@ -25,7 +25,7 @@ import {
   usePurchaseOrders,
   useReceiveGoods,
 } from "@/lib/use-procurement";
-import { formatCurrency } from "@/lib/utils";
+import { formatMoney } from "@/lib/utils";
 import type { PurchaseOrder } from "@/lib/procurement-types";
 
 // Mirrors CAN_APPROVE in backend/app/api/v1/procurement.py; the API enforces it, this only hides the buttons.
@@ -278,6 +278,7 @@ export default function ProcurementPage() {
                     <th className="px-4 py-3 font-medium">PO #</th>
                     <th className="px-4 py-3 font-medium">Total</th>
                     <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Paid</th>
                     <th className="px-4 py-3 font-medium">Action</th>
                   </tr>
                 </thead>
@@ -285,11 +286,20 @@ export default function ProcurementPage() {
                   {purchaseOrders.map((po) => (
                     <tr key={po.id} className="border-b border-border last:border-0 align-top">
                       <td className="px-4 py-3 font-medium text-ink">{po.po_number}</td>
-                      <td className="px-4 py-3 text-ink">{formatCurrency(po.total_amount)}</td>
+                      <td className="px-4 py-3 text-ink">{formatMoney(po.total_amount)}</td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PO_STATUS_CLASSES[po.status]}`}>
                           {po.status.replace("_", " ")}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {po.payment_status === "paid" ? (
+                          <span className="text-success">Paid</span>
+                        ) : po.payment_status === "partially_paid" ? (
+                          <span className="text-warning">{formatMoney(po.amount_paid)} paid</span>
+                        ) : (
+                          <span className="text-muted">Unpaid</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {po.status === "pending_approval" && (
@@ -298,7 +308,7 @@ export default function ProcurementPage() {
                             onClick={async () => {
                               const ok = await confirm({
                                 title: `Approve ${po.po_number}?`,
-                                body: `This commits ${formatCurrency(po.total_amount)} to the supplier and lets goods be received against it.`,
+                                body: `This commits ${formatMoney(po.total_amount)} to the supplier and lets goods be received against it.`,
                                 confirmLabel: "Approve",
                               });
                               if (ok) approvePO.mutate(po.id);

@@ -691,3 +691,32 @@ Several forms defaulted their date with `new Date().toISOString().slice(0, 10)`,
 
 ### Checked
 In a browser against an isolated copy (frontend on :3001 in a scratch folder, throwaway backend on :8001 with seeded data; the :3000/:8000 dev servers and the dev DB untouched): every sidebar item is a link; Tasks lists across projects, flags overdue, and an inline status change re-sorts the list; BOQ switches project and shows BOQ vs actual; Schedule keeps the chosen project and shows 18 days behind (checked by hand: 50% elapsed vs 35% done over 120 days); Daily Reports and Project Costs show the right project's data; Budgets totals match; Expenses creates a category, records an expense under it and updates the total. No console errors. All seven pages also compile and serve 200 on the :3000 dev server. Frontend `tsc` clean; task-related backend suites 45/45.
+
+---
+
+## Day 25 — 2026-10-09 — RFQs, quotations, comparison and payments (BUILD-041..043, 054)
+
+Built at Zark's request, after committing Days 18–24 to `claude/project-thread-onhym2`. These were previously marked as cut from scope.
+
+### RFQ → quotations → comparison → award (BUILD-041..043)
+- **RFQ:** a title, optional project, quotes-due date, materials and quantities, and the suppliers to ask. It can be raised **from a material request** (pending or approved): the project and items are copied over. Numbered `RFQ-1001…` per company.
+- **Quotations:** staff enter each supplier's quote (suppliers don't log in): a rate per item, delivery days, valid-until date and notes. A quote must price **every** item exactly once, so quotes are always comparable like for like. Re-entering a supplier's quote replaces it, and the form pre-fills the existing rates. A supplier who quotes without an invitation is added to the invited list.
+- **Comparison:** computed on the server (CLAUDE.md rule 11): line amounts, totals, the cheapest rate per item, the cheapest total (ties flagged for all), and expiry. Quotes are listed cheapest first.
+- **Award:** drafts a **purchase order at the quoted rates** through the existing PO service, so it goes to **pending approval** like any other PO and nothing is committed without a human approving it (rule 14). The RFQ is marked awarded in the same transaction that creates the PO, so it can't be awarded twice, and if the PO can't be created (e.g. its material request was rejected meanwhile) the RFQ stays open with nothing logged. Expired quotes can't be awarded. Awarding and cancelling are logged in the audit log. Roles: purchasing roles create RFQs and enter quotes; only admins and PMs award or cancel.
+- New page **/rfqs** (sidebar: Supply Chain → RFQs & Quotes).
+
+### Payments (BUILD-054)
+- **Supplier payments** against **approved** POs only (draft, pending and cancelled POs aren't owed yet). **No overpaying:** a payment that would exceed what's outstanding is refused, with the outstanding amount in the message. Every PO now reports `amount_paid` and `payment_status` (unpaid / partially paid / paid), shown in a new "Paid" column on the PO list.
+- **Client receipts** per project.
+- **Cash summary:** received, paid out and net, overall and per project; and **owed to each supplier** (approved PO value − paid).
+- Payments are **append-only** (no edit or delete endpoints; correct a mistake by recording what actually happened) and every one goes in the audit log. Only admins and accountants record them; everyone in the company can view.
+- New page **/payments** (sidebar: Cost Control → Payments).
+- Migrations **0018** (rfqs, rfq_items, rfq_suppliers, quotations, quotation_items) and **0019** (supplier_payments, client_receipts). New statuses are stored as text, not Postgres enums, so adding one later needs no migration. Applied to the dev Postgres (backed up first); afterwards the schema matched the models (drift check passed).
+
+### Found while testing in the browser
+- **Rounded money hid real differences:** the compact format showed rates of 1,400 and 1,450 both as "PKR 1.4K", and totals of 1,805,000 and 1,840,000 both as "PKR 1.8M", on a page whose whole job is comparing prices. Added `formatMoney()` (exact, with thousands separators) for places where amounts are compared or confirmed: RFQ comparison, payments, and the PO list and **PO approval dialog** (which had been asking people to approve "PKR 1.8M").
+
+### Checked
+- Tests: `tests/test_rfq_http.py` (12) and `tests/test_payments_http.py` (11). These cover the hand-checked comparison (including a tie), award → pending PO at quoted rates → material request converted, expired and failed awards leaving the RFQ open, overpay refused to the cent, the cash summary hand-checked, roles and tenant isolation. Mutation check: removing the overpay guard, the expiry guard, or the approved-PO filter in the summary each failed its test; restored.
+- Browser (isolated copy on :3001/:8001 with throwaway data): RFQ with two quotes compares correctly; a third quote entered through the form, from an uninvited supplier, adds them and updates the cheapest-per-item highlights; award via the confirm dialog drafts PO-1001 for 1,805,000; the PO is approved via its dialog; a 1,000,000 cheque payment updates paid, net, owed and history; an overpayment shows the inline warning and the server's refusal. No console errors except that expected 400.
+- Full suite after this work: **283 passed**.

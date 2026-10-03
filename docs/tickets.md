@@ -57,9 +57,9 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 
 ## Epic 8 — Procurement
 - [x] BUILD-040 Material request
-- [ ] BUILD-041 RFQ (deferred — scope cut, see daily log)
-- [ ] BUILD-042 Supplier quotation (deferred — scope cut, see daily log)
-- [ ] BUILD-043 Quotation comparison (deferred — scope cut, see daily log)
+- [x] BUILD-041 RFQ (from scratch or from a material request; invite suppliers; /rfqs)
+- [x] BUILD-042 Supplier quotation (staff enter each supplier's rates, delivery and validity; re-entering replaces)
+- [x] BUILD-043 Quotation comparison (side by side, cheapest per item and overall; award drafts a PO that still needs approval)
 - [x] BUILD-044 Purchase order
 - [x] BUILD-045 PO approval
 - [x] BUILD-046 Goods receipt
@@ -72,7 +72,7 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [x] BUILD-051 Project cost calculation
 - [x] BUILD-052 Budget vs actual
 - [x] BUILD-053 Forecast cost
-- [ ] BUILD-054 Cash/payment tracking (deferred — see daily log)
+- [x] BUILD-054 Cash/payment tracking (supplier payments against approved POs with no overpaying, client receipts, cash by project, payables per supplier; /payments)
 
 ## Epic 10 — AI Cost Intelligence
 - [x] BUILD-055 Cost variance detection (delivered via cost-summary's `expected_variance`)

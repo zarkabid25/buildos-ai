@@ -40,3 +40,5 @@ from app.models.material import MaterialCategory, Material  # noqa: F401
 from app.models.warehouse import Warehouse  # noqa: F401
 from app.models.inventory_transaction import InventoryTransaction  # noqa: F401
 from app.models.audit import AuditLog  # noqa: F401
+from app.models.rfq import Quotation, QuotationItem, Rfq, RfqItem, RfqSupplier  # noqa: F401
+from app.models.payment import ClientReceipt, SupplierPayment  # noqa: F401

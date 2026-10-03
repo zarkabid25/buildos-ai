@@ -96,3 +96,16 @@ class NotificationType(str, enum.Enum):
     MATERIAL_REQUEST_PENDING = "material_request_pending"
     PURCHASE_ORDER_PENDING = "purchase_order_pending"
     AI_PROPOSAL_PENDING = "ai_proposal_pending"
+
+
+class RfqStatus(str, enum.Enum):
+    OPEN = "open"  # sent to suppliers, quotations being collected
+    AWARDED = "awarded"  # a quotation was chosen and a PO drafted from it
+    CANCELLED = "cancelled"
+
+
+class PaymentMethod(str, enum.Enum):
+    BANK_TRANSFER = "bank_transfer"
+    CHEQUE = "cheque"
+    CASH = "cash"
+    OTHER = "other"

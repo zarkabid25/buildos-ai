@@ -16,10 +16,12 @@ from app.api.v1 import (
     materials,
     milestones,
     notifications,
+    payments,
     procurement,
     project_members,
     projects,
     reports,
+    rfqs,
     schedule,
     search,
     suppliers,
@@ -36,6 +38,8 @@ api_router.include_router(companies.router)
 api_router.include_router(users.router)
 api_router.include_router(reports.router)
 api_router.include_router(audit.router)
+api_router.include_router(rfqs.router)
+api_router.include_router(payments.router)
 api_router.include_router(projects.router)
 api_router.include_router(project_members.router)
 api_router.include_router(milestones.router)

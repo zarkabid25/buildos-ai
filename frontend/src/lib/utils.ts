@@ -21,6 +21,15 @@ export function formatCurrency(value: string | number, currency = displayCurrenc
   return `${currency} ${n.toFixed(0)}`;
 }
 
+/** Full amount with thousands separators, e.g. "PKR 1,805,000.50". Use where amounts are
+ *  compared or reconciled (quotes, payments); formatCurrency's 1.8M style hides differences. */
+export function formatMoney(value: string | number, currency = displayCurrency) {
+  const n = typeof value === "string" ? Number(value) : value;
+  if (!Number.isFinite(n)) return `${currency} 0`;
+  const hasCents = Math.round(n * 100) % 100 !== 0;
+  return `${currency} ${n.toLocaleString("en-US", { minimumFractionDigits: hasCents ? 2 : 0, maximumFractionDigits: 2 })}`;
+}
+
 export const STATUS_LABELS: Record<string, string> = {
   planning: "Planning",
   active: "Active",

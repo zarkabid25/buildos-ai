@@ -44,4 +44,6 @@ export interface PurchaseOrder {
   created_at: string;
   items: PurchaseOrderItem[];
   total_amount: string;
+  amount_paid: string;
+  payment_status: "unpaid" | "partially_paid" | "paid";
 }
