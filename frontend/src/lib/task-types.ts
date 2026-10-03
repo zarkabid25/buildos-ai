@@ -16,6 +16,12 @@ export interface Task {
   depends_on: string[];
 }
 
+export interface CompanyTask extends Task {
+  project_name: string;
+  project_code: string;
+  assignee_name: string | null;
+}
+
 export interface ProjectSchedule {
   tasks: Task[];
   milestones: { id: string; name: string; due_date: string | null; is_completed: boolean }[];
@@ -50,4 +56,5 @@ export interface ProjectHealth {
   labor_score: number | null;
   procurement_score: number | null;
   is_at_risk: boolean;
+  basis: Partial<Record<"schedule" | "cost" | "inventory", string>>;
 }

@@ -97,4 +97,4 @@ def delete_document(
     current_user: User = Depends(require_roles(*CAN_DELETE)),
     db: Session = Depends(get_db),
 ) -> None:
-    document_service.delete_document(db, current_user.company_id, document_id)
+    document_service.delete_document(db, current_user.company_id, current_user.id, document_id)

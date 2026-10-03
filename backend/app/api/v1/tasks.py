@@ -7,10 +7,12 @@ from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.task import TaskCreate, TaskDependencyCreate, TaskRead, TaskUpdate
+from app.models.enums import TaskStatus
+from app.schemas.task import CompanyTaskRead, TaskCreate, TaskDependencyCreate, TaskRead, TaskUpdate
 from app.services import task_service
 
 router = APIRouter(prefix="/projects/{project_id}/tasks", tags=["tasks"])
+company_router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 CAN_WRITE = (UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.PROJECT_MANAGER, UserRole.SITE_ENGINEER)
 
@@ -79,3 +81,16 @@ def remove_dependency(
     db: Session = Depends(get_db),
 ) -> None:
     task_service.remove_dependency(db, current_user.company_id, project_id, task_id, depends_on_task_id)
+
+
+@company_router.get("", response_model=list[CompanyTaskRead])
+def list_company_tasks(
+    mine: bool = False,
+    status: TaskStatus | None = None,
+    project_id: uuid.UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CompanyTaskRead]:
+    return task_service.list_company_tasks(
+        db, current_user.company_id, current_user.id if mine else None, status, project_id
+    )

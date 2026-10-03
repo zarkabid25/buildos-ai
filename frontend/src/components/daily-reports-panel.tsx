@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { localToday } from "@/lib/utils";
 import {
   fetchPhotoBlobUrl,
   useCreateDailyReport,
@@ -111,7 +112,7 @@ export function DailyReportsPanel({ projectId }: { projectId: string }) {
   const create = useCreateDailyReport(projectId);
 
   const [form, setForm] = useState({
-    report_date: new Date().toISOString().slice(0, 10),
+    report_date: localToday(),
     weather: "",
     workers_count: "",
     work_completed: "",

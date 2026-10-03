@@ -1,12 +1,14 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { Menu, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { GlobalSearch } from "@/components/global-search";
 import { NotificationBell } from "@/components/notification-bell";
 import { useAuth } from "@/lib/auth-context";
-import { cn } from "@/lib/utils";
+import { useCompany } from "@/lib/use-settings";
+import { cn, setDisplayCurrency } from "@/lib/utils";
 
 type NavItem = { label: string; href: string | null };
 type NavLink = { label: string; href: string; items?: undefined };
@@ -22,10 +24,10 @@ const NAV_SECTIONS: NavEntry[] = [
     label: "Construction",
     items: [
       { label: "Projects", href: "/projects" },
-      { label: "BOQ", href: null },
-      { label: "Tasks", href: null },
-      { label: "Schedule", href: null },
-      { label: "Daily Reports", href: null },
+      { label: "BOQ", href: "/boq" },
+      { label: "Tasks", href: "/tasks" },
+      { label: "Schedule", href: "/schedule" },
+      { label: "Daily Reports", href: "/daily-reports" },
     ],
   },
   {
@@ -41,9 +43,9 @@ const NAV_SECTIONS: NavEntry[] = [
   {
     label: "Cost Control",
     items: [
-      { label: "Budgets", href: null },
-      { label: "Expenses", href: null },
-      { label: "Project Costs", href: null },
+      { label: "Budgets", href: "/budgets" },
+      { label: "Expenses", href: "/expenses" },
+      { label: "Project Costs", href: "/project-costs" },
     ],
   },
   {
@@ -54,6 +56,7 @@ const NAV_SECTIONS: NavEntry[] = [
     ],
   },
   { label: "Documents", href: "/documents" },
+  { label: "Reports", href: "/reports" },
   { label: "AI Insights", href: "/ai-insights" },
 ];
 
@@ -78,6 +81,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const { data: company } = useCompany();
+  const currency = company?.currency ?? "PKR";
+  // Set during render (not in an effect) so the pages below format amounts with
+  // it on this same pass; the content is keyed on it below so a change re-renders them.
+  setDisplayCurrency(currency);
+
+  // Below md the sidebar is a drawer (BUILD-113); close it whenever the route changes.
+  const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => setNavOpen(false), [pathname]);
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setNavOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navOpen]);
 
   function handleLogout() {
     logout();
@@ -86,8 +104,26 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-screen w-full">
-      <aside className="flex w-64 flex-col bg-sidebar text-gray-300">
-        <div className="px-5 py-5 text-lg font-semibold text-white">BuildOS AI</div>
+      {navOpen && (
+        <div aria-hidden className="fixed inset-0 z-30 bg-black/30 md:hidden" onClick={() => setNavOpen(false)} />
+      )}
+      <aside
+        id="app-sidebar"
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-sidebar text-gray-300 transition-transform md:static md:translate-x-0",
+          navOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <div className="flex items-center justify-between px-5 py-5">
+          <span className="text-lg font-semibold text-white">BuildOS AI</span>
+          <button
+            aria-label="Close menu"
+            className="rounded p-1 text-gray-400 hover:text-white md:hidden"
+            onClick={() => setNavOpen(false)}
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3">
           {NAV_SECTIONS.map((section) =>
             section.items ? (
@@ -115,23 +151,32 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
         </nav>
         <div className="border-t border-white/10 px-3 py-3">
-          <div className="rounded-md px-2 py-1.5 text-sm hover:bg-white/5 hover:text-white">
-            Settings
-          </div>
+          <NavRow label="Settings" href="/settings" active={pathname === "/settings"} />
         </div>
       </aside>
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-6">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex h-14 items-center justify-between gap-3 border-b border-border bg-surface px-4 md:px-6">
+          <button
+            aria-label="Open menu"
+            aria-controls="app-sidebar"
+            aria-expanded={navOpen}
+            className="rounded p-1 text-muted hover:text-ink md:hidden"
+            onClick={() => setNavOpen(true)}
+          >
+            <Menu className="h-5 w-5" />
+          </button>
           <GlobalSearch />
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3">
             <NotificationBell />
-            <span className="text-sm font-medium">{user?.full_name ?? ""}</span>
+            <span className="hidden text-sm font-medium sm:inline">{user?.full_name ?? ""}</span>
             <button onClick={handleLogout} className="text-sm text-muted hover:text-ink">
               Log out
             </button>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto bg-background p-6">{children}</main>
+        <main key={currency} className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
+          {children}
+        </main>
       </div>
     </div>
   );

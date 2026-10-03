@@ -6,6 +6,8 @@ export interface AiStatus {
   configured: boolean;
   provider: string;
   model: string;
+  use_fallbacks: boolean;
+  max_tool_iterations: number;
 }
 
 export interface Insight {
@@ -80,6 +82,7 @@ export function useChat() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { inlineError: true },
     mutationFn: (input: { message: string; conversation_id?: string }) =>
       api.post<ChatResponse>("/ai/chat", input, accessToken ?? undefined),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ai", "proposals"] }),
@@ -90,6 +93,7 @@ export function useDecideProposal() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { inlineError: true },
     mutationFn: ({ id, decision }: { id: string; decision: "approve" | "reject" }) =>
       api.post<AiProposal>(`/ai/proposals/${id}/${decision}`, {}, accessToken ?? undefined),
     onSuccess: () => {

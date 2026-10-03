@@ -4,6 +4,7 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.db.updates import apply_changes
 from app.models.enums import AttendanceStatus
 from app.models.workforce import Attendance, Employee, EmployeeProjectAssignment
 from app.schemas.workforce import (
@@ -51,8 +52,7 @@ def update_employee(
     db: Session, company_id: uuid.UUID, employee_id: uuid.UUID, payload: EmployeeUpdate
 ) -> Employee:
     employee = get_employee(db, company_id, employee_id)
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(employee, field, value)
+    apply_changes(employee, payload.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(employee)
     return employee

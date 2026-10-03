@@ -1,11 +1,15 @@
 import uuid
+from datetime import date
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models.enums import NotificationType
+from app.db.updates import apply_changes
+from app.models.enums import NotificationType, TaskStatus
+from app.models.project import Project
 from app.models.task import Task, TaskDependency
-from app.schemas.task import TaskCreate, TaskUpdate
+from app.models.user import User
+from app.schemas.task import CompanyTaskRead, TaskCreate, TaskRead, TaskUpdate
 from app.services import notification_service
 from app.services.project_service import get_project
 
@@ -20,6 +24,44 @@ def list_tasks(db: Session, company_id: uuid.UUID, project_id: uuid.UUID) -> lis
     )
 
 
+def list_company_tasks(
+    db: Session,
+    company_id: uuid.UUID,
+    assignee_id: uuid.UUID | None = None,
+    status: TaskStatus | None = None,
+    project_id: uuid.UUID | None = None,
+) -> list[CompanyTaskRead]:
+    """Every task across the company's projects (the sidebar Tasks page). Open work
+    first, then by due date with undated tasks last."""
+    query = (
+        db.query(Task, Project.name, Project.code, User.full_name)
+        .join(Project, (Project.id == Task.project_id) & (Project.company_id == company_id))
+        .outerjoin(User, (User.id == Task.assignee_id) & (User.company_id == company_id))
+        .filter(Task.company_id == company_id)
+    )
+    if assignee_id:
+        query = query.filter(Task.assignee_id == assignee_id)
+    if status:
+        query = query.filter(Task.status == status)
+    if project_id:
+        query = query.filter(Task.project_id == project_id)
+    rows = query.all()
+
+    def sort_key(row):
+        task = row[0]
+        return (task.status == TaskStatus.DONE, task.due_date is None, task.due_date or date.max, task.title.lower())
+
+    return [
+        CompanyTaskRead(
+            **TaskRead.model_validate(task).model_dump(),
+            project_name=project_name,
+            project_code=project_code,
+            assignee_name=assignee_name,
+        )
+        for task, project_name, project_code, assignee_name in sorted(rows, key=sort_key)
+    ]
+
+
 def get_task(db: Session, company_id: uuid.UUID, project_id: uuid.UUID, task_id: uuid.UUID) -> Task:
     task = (
         db.query(Task)
@@ -31,10 +73,19 @@ def get_task(db: Session, company_id: uuid.UUID, project_id: uuid.UUID, task_id:
     return task
 
 
+def _check_assignee(db: Session, company_id: uuid.UUID, user_id: uuid.UUID) -> None:
+    # Only someone in the same company can be assigned (and notified about) a task.
+    exists = db.query(User.id).filter(User.company_id == company_id, User.id == user_id).first()
+    if not exists:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Assignee not found")
+
+
 def create_task(
     db: Session, company_id: uuid.UUID, project_id: uuid.UUID, actor_id: uuid.UUID, payload: TaskCreate
 ) -> Task:
     project = get_project(db, company_id, project_id)
+    if payload.assignee_id:
+        _check_assignee(db, company_id, payload.assignee_id)
     task = Task(company_id=company_id, project_id=project_id, **payload.model_dump())
     db.add(task)
     db.flush()
@@ -63,9 +114,10 @@ def update_task(
     task = get_task(db, company_id, project_id, task_id)
     updates = payload.model_dump(exclude_unset=True)
     previous_assignee = task.assignee_id
+    if updates.get("assignee_id"):
+        _check_assignee(db, company_id, updates["assignee_id"])
 
-    for field, value in updates.items():
-        setattr(task, field, value)
+    apply_changes(task, updates)
 
     newly_assigned = (
         "assignee_id" in updates

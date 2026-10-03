@@ -3,11 +3,13 @@ import uuid
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.db.updates import apply_changes
 from app.core.storage import DOCUMENT_TYPES, delete_file, resolve_path, save_upload
 from app.models.document import Document
 from app.models.enums import DocumentCategory
 from app.schemas.document import DocumentUpdate
 from app.services.project_service import get_project
+from app.services import audit_service
 
 
 def list_documents(
@@ -71,8 +73,7 @@ def update_document(
     db: Session, company_id: uuid.UUID, document_id: uuid.UUID, payload: DocumentUpdate
 ) -> Document:
     document = get_document(db, company_id, document_id)
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(document, field, value)
+    apply_changes(document, payload.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(document)
     return document
@@ -83,9 +84,13 @@ def get_document_file(db: Session, company_id: uuid.UUID, document_id: uuid.UUID
     return document, resolve_path(document.storage_key)
 
 
-def delete_document(db: Session, company_id: uuid.UUID, document_id: uuid.UUID) -> None:
+def delete_document(db: Session, company_id: uuid.UUID, actor_id: uuid.UUID, document_id: uuid.UUID) -> None:
     document = get_document(db, company_id, document_id)
     key = document.storage_key
+    audit_service.record(
+        db, company_id, actor_id, "document.deleted", "document", document.id,
+        f'Document deleted: "{document.title}" ({document.original_filename})',
+    )
     db.delete(document)
     db.commit()
     delete_file(key)

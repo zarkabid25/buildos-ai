@@ -7,8 +7,10 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState, QueryView } from "@/components/ui/states";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
+import { attempt } from "@/lib/utils";
 import { ApiError } from "@/lib/api";
 import {
   useAnomalies,
@@ -28,7 +30,7 @@ export default function InventoryPage() {
   const router = useRouter();
 
   const { data: dashboard } = useInventoryDashboard();
-  const { data: stockLevels } = useStockLevels();
+  const stockQuery = useStockLevels();
   const { data: materials } = useMaterials();
   const { data: forecasts } = useForecasts();
   const { data: anomalies } = useAnomalies();
@@ -52,18 +54,18 @@ export default function InventoryPage() {
 
   async function handleAddMaterial() {
     if (!materialForm.name || !materialForm.sku || !materialForm.unit) return;
-    await createMaterial.mutateAsync({
+    if (!(await attempt(createMaterial.mutateAsync({
       name: materialForm.name,
       sku: materialForm.sku,
       unit: materialForm.unit,
       reorder_point: materialForm.reorder_point ? Number(materialForm.reorder_point) : 0,
-    });
+    })))) return;
     setMaterialForm({ name: "", sku: "", unit: "", reorder_point: "" });
   }
 
   async function handleAddWarehouse() {
     if (!warehouseForm.name) return;
-    await createWarehouse.mutateAsync(warehouseForm);
+    if (!(await attempt(createWarehouse.mutateAsync(warehouseForm)))) return;
     setWarehouseForm({ name: "", location: "" });
   }
 
@@ -191,35 +193,41 @@ export default function InventoryPage() {
           {moveError && <p className="mt-2 text-sm text-danger">{moveError}</p>}
         </Card>
 
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
-                <th className="px-4 py-3 font-medium">Material</th>
-                <th className="px-4 py-3 font-medium">Warehouse</th>
-                <th className="px-4 py-3 font-medium">On Hand</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(!stockLevels || stockLevels.length === 0) && (
-                <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-sm text-muted">
-                    No stock movements yet. Add a material and warehouse, then use Stock In above.
-                  </td>
-                </tr>
-              )}
-              {stockLevels?.map((level) => (
-                <tr key={`${level.material_id}-${level.warehouse_id}`} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3 text-ink">{level.material_name}</td>
-                  <td className="px-4 py-3 text-muted">{level.warehouse_name}</td>
-                  <td className="px-4 py-3 text-ink">
-                    {level.quantity_on_hand} {level.unit}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+        <QueryView
+          query={stockQuery}
+          isEmpty={(levels) => levels.length === 0}
+          empty={
+            <EmptyState
+              title="No stock yet"
+              hint="Add a material and a warehouse, then use Stock In above."
+            />
+          }
+        >
+          {(stockLevels) => (
+            <Card className="overflow-x-auto p-0">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+                    <th className="px-4 py-3 font-medium">Material</th>
+                    <th className="px-4 py-3 font-medium">Warehouse</th>
+                    <th className="px-4 py-3 font-medium">On Hand</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stockLevels.map((level) => (
+                    <tr key={`${level.material_id}-${level.warehouse_id}`} className="border-b border-border last:border-0">
+                      <td className="px-4 py-3 text-ink">{level.material_name}</td>
+                      <td className="px-4 py-3 text-muted">{level.warehouse_name}</td>
+                      <td className="px-4 py-3 text-ink">
+                        {level.quantity_on_hand} {level.unit}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
+        </QueryView>
 
         <Card>
           <h2 className="mb-1 text-sm font-semibold text-ink">AI Inventory Forecast</h2>
@@ -227,7 +235,7 @@ export default function InventoryPage() {
             Consumption rate and days-to-stockout, computed from actual stock-out history (last 30
             days). Materials with no recorded consumption show no estimate rather than a guess.
           </p>
-          {(!forecasts || forecasts.length === 0) && (
+          {forecasts && forecasts.length === 0 && (
             <p className="text-sm text-muted">No materials to forecast yet.</p>
           )}
           {forecasts && forecasts.length > 0 && (

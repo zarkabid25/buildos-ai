@@ -39,6 +39,21 @@ async function refreshAccessToken(): Promise<TokenPair | null> {
   return refreshInFlight;
 }
 
+// FastAPI sends a string for most errors but a list of field errors for 422s;
+// turn the list into a sentence so no caller ever shows "[object Object]".
+function describeDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail
+      .map((d: { loc?: (string | number)[]; msg?: string }) => {
+        const field = d.loc?.filter((p) => p !== "body").join(".");
+        return field ? `${field}: ${d.msg ?? "invalid"}` : (d.msg ?? "invalid");
+      })
+      .join("; ");
+  }
+  return "Request failed";
+}
+
 async function request<T>(
   path: string,
   options: RequestInit & { accessToken?: string; _isRetry?: boolean } = {}
@@ -65,7 +80,7 @@ async function request<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new ApiError(res.status, body.detail ?? "Request failed");
+    throw new ApiError(res.status, describeDetail(body.detail));
   }
 
   if (res.status === 204) return undefined as T;

@@ -3,6 +3,7 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.db.updates import apply_changes
 from app.models.material import Material, MaterialCategory
 from app.schemas.material import MaterialCategoryCreate, MaterialCreate, MaterialUpdate
 
@@ -46,7 +47,19 @@ def get_material(db: Session, company_id: uuid.UUID, material_id: uuid.UUID) -> 
     return material
 
 
+def _check_category(db: Session, company_id: uuid.UUID, category_id: uuid.UUID) -> None:
+    exists = (
+        db.query(MaterialCategory.id)
+        .filter(MaterialCategory.company_id == company_id, MaterialCategory.id == category_id)
+        .first()
+    )
+    if not exists:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Material category not found")
+
+
 def create_material(db: Session, company_id: uuid.UUID, payload: MaterialCreate) -> Material:
+    if payload.category_id:
+        _check_category(db, company_id, payload.category_id)
     exists = (
         db.query(Material)
         .filter(Material.company_id == company_id, Material.sku == payload.sku)
@@ -66,8 +79,10 @@ def update_material(
     db: Session, company_id: uuid.UUID, material_id: uuid.UUID, payload: MaterialUpdate
 ) -> Material:
     material = get_material(db, company_id, material_id)
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(material, field, value)
+    changes = payload.model_dump(exclude_unset=True)
+    if changes.get("category_id"):
+        _check_category(db, company_id, changes["category_id"])
+    apply_changes(material, changes)
     db.commit()
     db.refresh(material)
     return material

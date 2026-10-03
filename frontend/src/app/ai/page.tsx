@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
+import { useFeedback } from "@/components/feedback";
 import { InsightsList, RulesNote } from "@/components/insights-list";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -35,6 +36,7 @@ interface ChatLine {
 export default function AiCommandCenterPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const { confirm } = useFeedback();
   const { data: status } = useAiStatus();
   const { data: insights } = useInsights();
   const { data: pending } = useProposals("pending");
@@ -76,7 +78,17 @@ export default function AiCommandCenterPage() {
     }
   }
 
-  async function handleDecision(id: string, decision: "approve" | "reject") {
+  async function handleDecision(id: string, summary: string, decision: "approve" | "reject") {
+    const ok = await confirm(
+      decision === "approve"
+        ? {
+            title: "Approve this draft?",
+            body: `${summary}. This creates a real material request in your name, the same as filling one in yourself.`,
+            confirmLabel: "Approve",
+          }
+        : { title: "Reject this draft?", body: summary, confirmLabel: "Reject", danger: true }
+    );
+    if (!ok) return;
     setDecisionError(null);
     try {
       await decide.mutateAsync({ id, decision });
@@ -128,12 +140,12 @@ export default function AiCommandCenterPage() {
                 <li key={p.id} className="flex items-center justify-between gap-3">
                   <span className="text-sm text-ink">{p.summary}</span>
                   <span className="flex shrink-0 gap-2">
-                    <Button onClick={() => handleDecision(p.id, "approve")} disabled={decide.isPending}>
+                    <Button onClick={() => handleDecision(p.id, p.summary, "approve")} disabled={decide.isPending}>
                       Approve
                     </Button>
                     <Button
                       variant="secondary"
-                      onClick={() => handleDecision(p.id, "reject")}
+                      onClick={() => handleDecision(p.id, p.summary, "reject")}
                       disabled={decide.isPending}
                     >
                       Reject

@@ -46,6 +46,7 @@ export function useCreateProject() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: { inlineError: true },
     mutationFn: (input: ProjectCreateInput) =>
       api.post<Project>("/projects", input, accessToken ?? undefined),
     onSuccess: () => {

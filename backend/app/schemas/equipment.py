@@ -9,13 +9,13 @@ from app.models.enums import EquipmentStatus
 
 class EquipmentCreate(BaseModel):
     name: str = Field(min_length=2, max_length=255)
-    equipment_type: str | None = None
+    equipment_type: str | None = Field(default=None, max_length=100)
     notes: str | None = None
 
 
 class EquipmentUpdate(BaseModel):
-    name: str | None = None
-    equipment_type: str | None = None
+    name: str | None = Field(default=None, max_length=255)
+    equipment_type: str | None = Field(default=None, max_length=100)
     status: EquipmentStatus | None = None
     current_project_id: uuid.UUID | None = None
     notes: str | None = None

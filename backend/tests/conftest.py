@@ -4,20 +4,36 @@ import tempfile
 # Must be set before anything imports app.*: settings are cached and the
 # SQLAlchemy engine is built at import time.
 _tmp = tempfile.mkdtemp(prefix="buildos-tests-")
-os.environ["DATABASE_URL"] = f"sqlite:///{_tmp}/test.db"
+# SQLite by default (fast, no setup). Set TEST_DATABASE_URL to run the same suite
+# against a real, *disposable* Postgres database, which catches Postgres-only
+# behaviour. Every test drops and recreates all tables, so never point it at real data.
+os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL") or f"sqlite:///{_tmp}/test.db"
 os.environ["STORAGE_DIR"] = f"{_tmp}/storage"
 os.environ["MAX_UPLOAD_BYTES"] = str(1024 * 1024)
 # An empty env var beats a key in backend/.env, so the suite can never hit the
 # real Anthropic API even on a machine that has a key configured.
 os.environ["LLM_API_KEY"] = ""
 os.environ["LLM_MODEL"] = "claude-opus-5"
+os.environ["LLM_USE_FALLBACKS"] = "true"
+os.environ["LLM_MAX_TOOL_ITERATIONS"] = "8"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import event  # noqa: E402
 
 from app import models  # noqa: E402,F401
 from app.db.base_class import Base  # noqa: E402
 from app.db.session import engine  # noqa: E402
+
+
+# SQLite ignores foreign keys unless asked; Postgres always enforces them. Turn them
+# on so a dangling reference fails here the same way it would in production.
+@event.listens_for(engine, "connect")
+def _enforce_foreign_keys(dbapi_connection, _record):
+    if engine.dialect.name == "sqlite":
+        dbapi_connection.execute("PRAGMA foreign_keys=ON")
+
+
 from app.main import app  # noqa: E402
 
 
@@ -30,6 +46,10 @@ def fresh_db():
     # Uploaded files must not leak between tests either, or "nothing was stored"
     # assertions would depend on test order.
     shutil.rmtree(os.environ["STORAGE_DIR"], ignore_errors=True)
+    # Rate-limit counters are in memory and would otherwise carry over between tests.
+    from app.core.rate_limit import limiter
+
+    limiter.reset()
     yield
 
 

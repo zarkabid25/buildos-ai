@@ -4,13 +4,15 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
+import { useFeedback } from "@/components/feedback";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState, QueryView } from "@/components/ui/states";
 import { useAuth } from "@/lib/auth-context";
 import { useProjects } from "@/lib/use-projects";
 import { useCreateEmployee, useEmployees, useRecordAttendance } from "@/lib/use-workforce";
-import { formatCurrency } from "@/lib/utils";
+import { attempt, formatCurrency, localToday } from "@/lib/utils";
 import type { AttendanceStatus } from "@/lib/workforce-types";
 
 const ATTENDANCE_OPTIONS: AttendanceStatus[] = ["present", "absent", "half_day", "leave"];
@@ -18,7 +20,9 @@ const ATTENDANCE_OPTIONS: AttendanceStatus[] = ["present", "absent", "half_day",
 export default function WorkforcePage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const { data: employees } = useEmployees();
+  const employeesQuery = useEmployees();
+  const employees = employeesQuery.data;
+  const { toast } = useFeedback();
   const { data: projects } = useProjects();
   const createEmployee = useCreateEmployee();
   const recordAttendance = useRecordAttendance();
@@ -27,7 +31,7 @@ export default function WorkforcePage() {
   const [attForm, setAttForm] = useState({
     employee_id: "",
     project_id: "",
-    attendance_date: new Date().toISOString().slice(0, 10),
+    attendance_date: localToday(),
     status: "present" as AttendanceStatus,
   });
 
@@ -39,13 +43,14 @@ export default function WorkforcePage() {
 
   async function handleAddEmployee() {
     if (!empForm.full_name) return;
-    await createEmployee.mutateAsync(empForm);
+    if (!(await attempt(createEmployee.mutateAsync(empForm)))) return;
     setEmpForm({ full_name: "", designation: "", daily_wage: "" });
   }
 
   async function handleRecordAttendance() {
     if (!attForm.employee_id || !attForm.project_id) return;
-    await recordAttendance.mutateAsync(attForm);
+    if (!(await attempt(recordAttendance.mutateAsync(attForm)))) return;
+    toast("Attendance recorded.", "success");
   }
 
   return (
@@ -128,35 +133,36 @@ export default function WorkforcePage() {
           </Card>
         </div>
 
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Designation</th>
-                <th className="px-4 py-3 font-medium">Daily Wage</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(!employees || employees.length === 0) && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-sm text-muted">
-                    No employees yet.
-                  </td>
-                </tr>
-              )}
-              {employees?.map((emp) => (
-                <tr key={emp.id} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3 font-medium text-ink">{emp.full_name}</td>
-                  <td className="px-4 py-3 text-muted">{emp.designation ?? "—"}</td>
-                  <td className="px-4 py-3 text-ink">{formatCurrency(emp.daily_wage)}</td>
-                  <td className="px-4 py-3 text-muted">{emp.is_active ? "Active" : "Inactive"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+        <QueryView
+          query={employeesQuery}
+          isEmpty={(list) => list.length === 0}
+          empty={<EmptyState title="No employees yet" hint="Add people above to assign them and record attendance." />}
+        >
+          {(employeeList) => (
+            <Card className="overflow-x-auto p-0">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+                    <th className="px-4 py-3 font-medium">Name</th>
+                    <th className="px-4 py-3 font-medium">Designation</th>
+                    <th className="px-4 py-3 font-medium">Daily Wage</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employeeList.map((emp) => (
+                    <tr key={emp.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-3 font-medium text-ink">{emp.full_name}</td>
+                      <td className="px-4 py-3 text-muted">{emp.designation ?? "—"}</td>
+                      <td className="px-4 py-3 text-ink">{formatCurrency(emp.daily_wage)}</td>
+                      <td className="px-4 py-3 text-muted">{emp.is_active ? "Active" : "Inactive"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
+        </QueryView>
       </div>
     </AppShell>
   );

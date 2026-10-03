@@ -7,7 +7,7 @@ from app.models.enums import TaskPriority, TaskStatus
 
 
 class TaskBase(BaseModel):
-    title: str
+    title: str = Field(max_length=255)
     description: str | None = None
     assignee_id: uuid.UUID | None = None
     priority: TaskPriority = TaskPriority.MEDIUM
@@ -20,7 +20,7 @@ class TaskCreate(TaskBase):
 
 
 class TaskUpdate(BaseModel):
-    title: str | None = None
+    title: str | None = Field(default=None, max_length=255)
     description: str | None = None
     assignee_id: uuid.UUID | None = None
     priority: TaskPriority | None = None
@@ -38,6 +38,14 @@ class TaskRead(TaskBase):
     created_at: datetime
     updated_at: datetime
     depends_on: list[uuid.UUID] = Field(default_factory=list)
+
+
+class CompanyTaskRead(TaskRead):
+    """A task in the company-wide list, with enough context to show it outside its project."""
+
+    project_name: str
+    project_code: str
+    assignee_name: str | None = None
 
 
 class TaskDependencyCreate(BaseModel):

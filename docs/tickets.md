@@ -26,7 +26,7 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 ## Epic 4 — BOQ
 - [x] BUILD-016 BOQ management
 - [x] BUILD-017 BOQ calculations
-- [ ] BUILD-018 BOQ vs Actual
+- [x] BUILD-018 BOQ vs Actual (material-linked BOQ lines vs stock allocated to the project; quantity variance valued at BOQ rate)
 - [x] BUILD-019 AI BOQ assistant
 
 ## Epic 5 — Inventory
@@ -51,9 +51,9 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 ## Epic 7 — Suppliers
 - [x] BUILD-035 Supplier CRUD
 - [x] BUILD-036 Supplier contacts
-- [ ] BUILD-037 Supplier transaction history (blocked on Purchase Orders — Epic 8)
-- [ ] BUILD-038 Supplier performance (blocked on Purchase Orders — Epic 8)
-- [ ] BUILD-039 AI supplier insights (blocked on Purchase Orders — Epic 8)
+- [x] BUILD-037 Supplier transaction history (every PO with ordered vs received value, receipts, project)
+- [~] BUILD-038 Supplier performance (fulfilment % and lead time done; on-time delivery needs a promised date on POs, and quality/price scoring needs data we don't capture yet)
+- [ ] BUILD-039 AI supplier insights (PO data now exists; the model-written part needs a real LLM key, same as Epic 16)
 
 ## Epic 8 — Procurement
 - [x] BUILD-040 Material request
@@ -123,7 +123,7 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 
 ## Epic 17 — Project Risk
 - [~] BUILD-088 Risk model (rules in app/ai/insights.py: schedule, cost, inventory, equipment, procurement)
-- [ ] BUILD-089 Project health score
+- [~] BUILD-089 Project health score (schedule, cost and inventory scored from real data, overall = their average; quality/safety/labor/procurement have no scoring data yet)
 - [x] BUILD-090 Risk dashboard (/ai-insights and dashboard card)
 - [ ] BUILD-091 AI risk explanation
 
@@ -145,53 +145,53 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [ ] BUILD-102 AI semantic search (needs an embeddings provider decision, see Day 14)
 
 ## Epic 21 — Settings
-- [ ] BUILD-103 Company settings
-- [ ] BUILD-104 User settings
-- [ ] BUILD-105 Role permissions
-- [ ] BUILD-106 Currency/unit settings
-- [ ] BUILD-107 AI settings (model/key are server env vars only; no settings UI)
+- [x] BUILD-103 Company settings (/settings; admins edit name/contact/currency/unit system, validated; others read-only)
+- [x] BUILD-104 User settings (edit own name, change password with current-password check)
+- [~] BUILD-105 Role permissions (admins list users, change roles, deactivate; guards against self-lockout and non-super-admins granting super admin. What each role may do is still hardcoded per router, not editable; no invite flow)
+- [~] BUILD-106 Currency/unit settings (company currency now labels every amount in the UI, no conversion; unit system is stored but nothing converts units)
+- [~] BUILD-107 AI settings (read-only section on /settings: connected or not, provider, model, tool-step limit; the key stays a server env var and is never shown. Editing model/key in the UI would mean storing an encrypted secret per company, which needs a decision)
 
 ## Epic 22 — Reports
-- [ ] BUILD-108 Project report
-- [ ] BUILD-109 Inventory report
-- [ ] BUILD-110 Procurement report
-- [ ] BUILD-111 Expense report
+- [x] BUILD-108 Project report (/reports: budget, committed, spent, forecast, variance, schedule, health, open/overdue tasks per project; CSV)
+- [x] BUILD-109 Inventory report (current on-hand + status, received/issued in a period; CSV)
+- [x] BUILD-110 Procurement report (POs by status, spend per supplier, material requests by status, in a period; CSV)
+- [x] BUILD-111 Expense report (by project x category in a period, category totals; CSV)
 - [ ] BUILD-112 AI executive report
 
 ## Epic 23 — UX Polish
-- [ ] BUILD-113 Responsive layout
-- [ ] BUILD-114 Loading states
-- [ ] BUILD-115 Skeleton loaders
-- [ ] BUILD-116 Empty states
-- [ ] BUILD-117 Error states
-- [ ] BUILD-118 Toast notifications
-- [ ] BUILD-119 Confirmation dialogs
-- [ ] BUILD-120 Form validation
+- [x] BUILD-113 Responsive layout (sidebar becomes a drawer below md; tables scroll inside their cards; tab rows scroll; checked at 375px)
+- [x] BUILD-114 Loading states
+- [x] BUILD-115 Skeleton loaders (main lists, dashboard, project page, reports)
+- [x] BUILD-116 Empty states (shared EmptyState; no longer shown while loading or on error)
+- [x] BUILD-117 Error states (load failures show a retryable error instead of "no data"; every failed save is reported; 422s are readable)
+- [x] BUILD-118 Toast notifications (no new dependency)
+- [x] BUILD-119 Confirmation dialogs (delete document, remove BOQ line, approve PO, approve/reject AI draft, deactivate user)
+- [~] BUILD-120 Form validation (server validation errors are now shown field by field, and a few forms check up front; only project create uses zod on the client)
 
 ## Epic 24 — Security
-- [ ] BUILD-121 API authorization
-- [ ] BUILD-122 Tenant isolation
-- [ ] BUILD-123 Input validation
-- [ ] BUILD-124 File upload validation (partial: type allow-list + size cap + safe filenames exist; no content sniffing yet)
-- [ ] BUILD-125 Rate limiting
-- [ ] BUILD-126 Audit log
+- [x] BUILD-121 API authorization (test walks every endpoint in the OpenAPI schema: all but 4 public ones reject no-token and forged-token requests)
+- [x] BUILD-122 Tenant isolation (audit of every client-sent ID; fixed task assignee, expense category, material category, equipment project, expense-report category join)
+- [x] BUILD-123 Input validation (string limits match DB columns, enforced by a test; null for a required field is a 422, not a 500)
+- [x] BUILD-124 File upload validation (type allow-list, size cap, safe filenames, and file contents must match the declared type)
+- [~] BUILD-125 Rate limiting (login, register and password change are limited; the counters live in process memory, so they would need Redis once there is more than one worker)
+- [x] BUILD-126 Audit log (PO created/approved, goods received, material request decided, AI draft decided, expense, role/deactivation, company settings, document and BOQ deletes; admins read it in Settings)
 
 ## Epic 25 — Testing
-- [ ] BUILD-127 Backend unit tests
-- [ ] BUILD-128 API integration tests
-- [ ] BUILD-129 Authentication tests (done in tests/test_auth_http.py: 7 tests over real HTTP+JWT, incl. cross-tenant; role-based tests live with each module)
-- [ ] BUILD-130 Inventory tests
-- [ ] BUILD-131 Procurement tests
-- [ ] BUILD-132 Project tests
+- [x] BUILD-127 Backend unit tests (tests/test_units.py: schedule variance, upload content check, rate limiter, apply_changes)
+- [x] BUILD-128 API integration tests (every module has an HTTP suite through real JWT auth; SQLite now enforces foreign keys like Postgres)
+- [x] BUILD-129 Authentication tests (test_auth_http.py, test_api_authorization_http.py, test_rate_limit_http.py; role checks live with each module)
+- [x] BUILD-130 Inventory tests (test_inventory_http.py: ledger math, guards, roles, isolation)
+- [x] BUILD-131 Procurement tests (test_procurement_http.py; found and fixed 2 bugs in material request status handling)
+- [x] BUILD-132 Project tests (test_projects_finance_http.py; found and fixed 3 bugs: negative budget on update, end before start, deleting a project with records)
 - [~] BUILD-133 AI tests (tool loop, scoping, approval gate, request shape: done; real model behaviour: not testable without a key)
-- [ ] BUILD-134 Frontend critical-flow tests
+- [ ] BUILD-134 Frontend critical-flow tests (needs a browser test runner, e.g. Playwright, which would be a new dev dependency; waiting on a decision)
 
 ## Epic 26 — Deployment
-- [ ] BUILD-135 Production Docker setup
-- [ ] BUILD-136 Production database
-- [ ] BUILD-137 Environment configuration
-- [ ] BUILD-138 Storage configuration
-- [ ] BUILD-139 Domain/SSL
-- [ ] BUILD-140 CI/CD
-- [ ] BUILD-141 Database backup
-- [ ] BUILD-142 Logging/monitoring
+- [~] BUILD-135 Production Docker setup (Dockerfile.prod for both apps + deploy/docker-compose.prod.yml; production `next build` and migrations verified, but no Docker on this machine, so the images themselves have not been built)
+- [ ] BUILD-136 Production database (needs a decision: containerised Postgres as in the compose file, or a managed service. Migration chain verified on a fresh Postgres 17)
+- [x] BUILD-137 Environment configuration (refuses to start in production with default secret / example DB password / localhost CORS; deploy/.env.production.example; .gitignore now covers every .env.* file)
+- [ ] BUILD-138 Storage configuration (needs a decision on an S3-compatible provider; uploads currently go to a persistent Docker volume)
+- [ ] BUILD-139 Domain/SSL (needs a domain and a choice of reverse proxy; see deploy/OPERATIONS.md)
+- [~] BUILD-140 CI/CD (CI done: .github/workflows/ci.yml runs tests on SQLite and Postgres, a migration-drift check, tsc and next build. CD waits on a deployment target)
+- [x] BUILD-141 Database backup (deploy/backup.sh: database + uploaded files, verified, rotated; restore steps in deploy/OPERATIONS.md)
+- [~] BUILD-142 Logging/monitoring (request logs with X-Request-ID, /health/ready readiness check; no metrics/alerting service chosen)

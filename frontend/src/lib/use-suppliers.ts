@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import type { Supplier, SupplierContact } from "@/lib/supplier-types";
+import type {
+  Supplier,
+  SupplierContact,
+  SupplierPerformance,
+  SupplierTransaction,
+} from "@/lib/supplier-types";
 
 export function useSuppliers() {
   const { accessToken } = useAuth();
@@ -41,5 +46,25 @@ export function useAddSupplierContact(supplierId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["suppliers", supplierId, "contacts"] });
     },
+  });
+}
+
+export function useSupplierTransactions(supplierId: string) {
+  const { accessToken } = useAuth();
+  return useQuery({
+    queryKey: ["suppliers", supplierId, "transactions"],
+    queryFn: () =>
+      api.get<SupplierTransaction[]>(`/suppliers/${supplierId}/transactions`, accessToken ?? undefined),
+    enabled: !!accessToken && !!supplierId,
+  });
+}
+
+export function useSupplierPerformance(supplierId: string) {
+  const { accessToken } = useAuth();
+  return useQuery({
+    queryKey: ["suppliers", supplierId, "performance"],
+    queryFn: () =>
+      api.get<SupplierPerformance>(`/suppliers/${supplierId}/performance`, accessToken ?? undefined),
+    enabled: !!accessToken && !!supplierId,
   });
 }

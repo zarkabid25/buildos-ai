@@ -4,17 +4,21 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
+import { useFeedback } from "@/components/feedback";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState, QueryView } from "@/components/ui/states";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
+import type { UserRole } from "@/lib/auth-types";
 import { ApiError } from "@/lib/api";
 import { useMaterials, useWarehouses } from "@/lib/use-inventory";
 import { useProjects } from "@/lib/use-projects";
 import { useSuppliers } from "@/lib/use-suppliers";
 import {
   useApprovePurchaseOrder,
+  useDecideMaterialRequest,
   useCreateMaterialRequest,
   useCreatePurchaseOrder,
   useMaterialRequests,
@@ -23,6 +27,9 @@ import {
 } from "@/lib/use-procurement";
 import { formatCurrency } from "@/lib/utils";
 import type { PurchaseOrder } from "@/lib/procurement-types";
+
+// Mirrors CAN_APPROVE in backend/app/api/v1/procurement.py; the API enforces it, this only hides the buttons.
+const CAN_DECIDE: UserRole[] = ["super_admin", "company_admin", "project_manager"];
 
 const MR_STATUS_CLASSES: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700",
@@ -44,8 +51,8 @@ export default function ProcurementPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
 
-  const { data: materialRequests } = useMaterialRequests();
-  const { data: purchaseOrders } = usePurchaseOrders();
+  const requestsQuery = useMaterialRequests();
+  const ordersQuery = usePurchaseOrders();
   const { data: projects } = useProjects();
   const { data: materials } = useMaterials();
   const { data: suppliers } = useSuppliers();
@@ -54,6 +61,8 @@ export default function ProcurementPage() {
   const createMR = useCreateMaterialRequest();
   const createPO = useCreatePurchaseOrder();
   const approvePO = useApprovePurchaseOrder();
+  const decideRequest = useDecideMaterialRequest();
+  const { confirm } = useFeedback();
   const receiveGoods = useReceiveGoods();
 
   const [mrForm, setMrForm] = useState({ project_id: "", material_id: "", quantity: "" });
@@ -203,60 +212,101 @@ export default function ProcurementPage() {
           </Card>
         </div>
 
-        <Card>
-          <h2 className="mb-3 text-sm font-semibold text-ink">Material Requests</h2>
-          {(!materialRequests || materialRequests.length === 0) && (
-            <p className="text-sm text-muted">No material requests yet.</p>
-          )}
-          <ul className="divide-y divide-border">
-            {materialRequests?.map((mr) => (
-              <li key={mr.id} className="flex items-center justify-between py-2 text-sm">
-                <span className="text-ink">{mr.items.length} item(s)</span>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${MR_STATUS_CLASSES[mr.status]}`}>
-                  {mr.status}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card className="overflow-x-auto p-0">
-          <h2 className="px-4 pt-4 text-sm font-semibold text-ink">Purchase Orders</h2>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
-                <th className="px-4 py-3 font-medium">PO #</th>
-                <th className="px-4 py-3 font-medium">Total</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(!purchaseOrders || purchaseOrders.length === 0) && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-sm text-muted">
-                    No purchase orders yet.
-                  </td>
-                </tr>
-              )}
-              {purchaseOrders?.map((po) => (
-                <tr key={po.id} className="border-b border-border last:border-0 align-top">
-                  <td className="px-4 py-3 font-medium text-ink">{po.po_number}</td>
-                  <td className="px-4 py-3 text-ink">{formatCurrency(po.total_amount)}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PO_STATUS_CLASSES[po.status]}`}>
-                      {po.status.replace("_", " ")}
+        <h2 className="text-sm font-semibold text-ink">Material Requests</h2>
+        <QueryView
+          query={requestsQuery}
+          isEmpty={(list) => list.length === 0}
+          empty={<EmptyState title="No material requests yet" hint="Site teams raise these from the form above." />}
+        >
+          {(materialRequests) => (
+            <Card>
+              <ul className="divide-y divide-border">
+                {materialRequests.map((mr) => (
+                  <li key={mr.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                    <span className="text-ink">{mr.items.length} item(s)</span>
+                    <span className="flex items-center gap-2">
+                      {mr.status === "pending" && CAN_DECIDE.includes(user.role) && (
+                        <>
+                          <Button
+                            variant="secondary"
+                            className="h-7 px-2 text-xs"
+                            disabled={decideRequest.isPending}
+                            onClick={() => decideRequest.mutate({ id: mr.id, status: "approved" })}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className="h-7 px-2 text-xs text-muted hover:text-danger"
+                            disabled={decideRequest.isPending}
+                            onClick={async () => {
+                              const ok = await confirm({
+                                title: "Reject this material request?",
+                                body: "It can't be reopened; the site team would need to raise a new one.",
+                                confirmLabel: "Reject",
+                                danger: true,
+                              });
+                              if (ok) decideRequest.mutate({ id: mr.id, status: "rejected" });
+                            }}
+                          >
+                            Reject
+                          </Button>
+                        </>
+                      )}
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${MR_STATUS_CLASSES[mr.status]}`}>
+                        {mr.status}
+                      </span>
                     </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {po.status === "pending_approval" && (
-                      <Button
-                        variant="secondary"
-                        onClick={() => approvePO.mutate(po.id)}
-                        disabled={approvePO.isPending}
-                      >
-                        Approve
-                      </Button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </QueryView>
+
+        <h2 className="text-sm font-semibold text-ink">Purchase Orders</h2>
+        <QueryView
+          query={ordersQuery}
+          isEmpty={(list) => list.length === 0}
+          empty={<EmptyState title="No purchase orders yet" hint="Create one above, or convert an approved material request." />}
+        >
+          {(purchaseOrders) => (
+            <Card className="overflow-x-auto p-0">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+                    <th className="px-4 py-3 font-medium">PO #</th>
+                    <th className="px-4 py-3 font-medium">Total</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchaseOrders.map((po) => (
+                    <tr key={po.id} className="border-b border-border last:border-0 align-top">
+                      <td className="px-4 py-3 font-medium text-ink">{po.po_number}</td>
+                      <td className="px-4 py-3 text-ink">{formatCurrency(po.total_amount)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PO_STATUS_CLASSES[po.status]}`}>
+                          {po.status.replace("_", " ")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {po.status === "pending_approval" && (
+                          <Button
+                            variant="secondary"
+                            onClick={async () => {
+                              const ok = await confirm({
+                                title: `Approve ${po.po_number}?`,
+                                body: `This commits ${formatCurrency(po.total_amount)} to the supplier and lets goods be received against it.`,
+                                confirmLabel: "Approve",
+                              });
+                              if (ok) approvePO.mutate(po.id);
+                            }}
+                            disabled={approvePO.isPending}
+                          >
+                            Approve
+                          </Button>
                     )}
                     {(po.status === "approved" || po.status === "partially_received") && (
                       <div className="flex flex-wrap items-center gap-2">
@@ -298,6 +348,8 @@ export default function ProcurementPage() {
             </tbody>
           </table>
         </Card>
+          )}
+        </QueryView>
       </div>
     </AppShell>
   );

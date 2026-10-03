@@ -66,7 +66,7 @@ def update_material_request_status(
     db: Session = Depends(get_db),
 ) -> MaterialRequestRead:
     return procurement_service.update_material_request_status(
-        db, current_user.company_id, request_id, payload.status
+        db, current_user.company_id, current_user.id, request_id, payload.status
     )
 
 

@@ -50,6 +50,7 @@ export function useCreateDailyReport(projectId: string) {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { inlineError: true },
     mutationFn: (input: DailyReportInput) =>
       api.post<DailyReport>(`/projects/${projectId}/daily-reports`, input, accessToken ?? undefined),
     onSuccess: () =>
@@ -61,6 +62,7 @@ export function useUploadReportPhoto(projectId: string) {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { inlineError: true },
     // api.ts always sends JSON, so multipart goes through fetch directly (the
     // browser must set the multipart boundary header itself).
     mutationFn: async ({ reportId, file }: { reportId: string; file: File }) => {

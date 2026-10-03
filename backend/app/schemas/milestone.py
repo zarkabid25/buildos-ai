@@ -1,11 +1,11 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MilestoneBase(BaseModel):
-    name: str
+    name: str = Field(max_length=255)
     due_date: date | None = None
 
 
@@ -14,7 +14,7 @@ class MilestoneCreate(MilestoneBase):
 
 
 class MilestoneUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=255)
     due_date: date | None = None
     is_completed: bool | None = None
     completed_date: date | None = None

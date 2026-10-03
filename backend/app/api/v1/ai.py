@@ -50,7 +50,14 @@ def get_llm() -> LLMClient:
 @router.get("/status", response_model=AiStatus)
 def ai_status(current_user: User = Depends(get_current_user)) -> AiStatus:
     settings = get_settings()
-    return AiStatus(configured=bool(settings.llm_api_key), provider="anthropic", model=settings.llm_model)
+    # Deliberately no key (not even a masked one): it's a server env var, never shown in the app.
+    return AiStatus(
+        configured=bool(settings.llm_api_key),
+        provider="anthropic",
+        model=settings.llm_model,
+        use_fallbacks=settings.llm_use_fallbacks,
+        max_tool_iterations=settings.llm_max_tool_iterations,
+    )
 
 
 @router.get("/insights", response_model=InsightsReport)

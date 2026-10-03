@@ -14,6 +14,11 @@ class BoqItem(TenantBase):
     project_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("projects.id"), index=True, nullable=False
     )
+    # Optional link to an inventory material. When set, BOQ vs Actual compares this
+    # line's planned quantity with stock allocated to the project for that material.
+    material_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("materials.id"), index=True, nullable=True
+    )
     item_code: Mapped[str] = mapped_column(String(50), nullable=False)
     description: Mapped[str] = mapped_column(String(500), nullable=False)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)

@@ -4,7 +4,9 @@ from datetime import date
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.db.updates import apply_changes
 from app.models.equipment import Equipment, EquipmentMaintenance
+from app.services.project_service import get_project
 from app.schemas.equipment import EquipmentCreate, EquipmentMaintenanceCreate, EquipmentUpdate, MaintenanceReminder
 
 # Equipment with a maintenance due date inside this window (including overdue)
@@ -44,8 +46,10 @@ def update_equipment(
     db: Session, company_id: uuid.UUID, equipment_id: uuid.UUID, payload: EquipmentUpdate
 ) -> Equipment:
     equipment = get_equipment(db, company_id, equipment_id)
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(equipment, field, value)
+    changes = payload.model_dump(exclude_unset=True)
+    if changes.get("current_project_id"):
+        get_project(db, company_id, changes["current_project_id"])
+    apply_changes(equipment, changes)
     db.commit()
     db.refresh(equipment)
     return equipment

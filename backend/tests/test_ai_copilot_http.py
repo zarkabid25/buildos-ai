@@ -92,7 +92,10 @@ def test_status_reports_configuration_and_never_returns_the_key(client, auth_a, 
     finally:
         monkeypatch.setenv("LLM_API_KEY", "")
         get_settings.cache_clear()
-    assert res.json() == {"configured": True, "provider": "anthropic", "model": "claude-opus-5"}
+    assert res.json() == {
+        "configured": True, "provider": "anthropic", "model": "claude-opus-5",
+        "use_fallbacks": True, "max_tool_iterations": 8,
+    }
     assert "sk-ant-test-secret" not in res.text
 
 

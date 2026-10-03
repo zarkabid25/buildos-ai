@@ -17,3 +17,8 @@ export interface ProjectCostSummary {
   expected_variance: string;
   forecast_basis: string;
 }
+
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+}

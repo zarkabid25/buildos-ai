@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type {
+  CompanyTask,
   Milestone,
   ProjectHealth,
   ProjectMember,
@@ -36,6 +37,7 @@ export function useAddDependency(projectId: string) {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { inlineError: true },
     mutationFn: ({ taskId, dependsOnTaskId }: { taskId: string; dependsOnTaskId: string }) =>
       api.post<Task>(
         `/projects/${projectId}/tasks/${taskId}/dependencies`,
@@ -83,6 +85,35 @@ export function useUpdateTaskStatus(projectId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects", projectId, "tasks"] });
       queryClient.invalidateQueries({ queryKey: ["projects", projectId, "schedule"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+}
+
+export function useCompanyTasks(filters: { mine?: boolean; status?: TaskStatus; projectId?: string }) {
+  const { accessToken } = useAuth();
+  const params = new URLSearchParams();
+  if (filters.mine) params.set("mine", "true");
+  if (filters.status) params.set("status", filters.status);
+  if (filters.projectId) params.set("project_id", filters.projectId);
+  const query = params.toString();
+  return useQuery({
+    queryKey: ["tasks", filters],
+    queryFn: () => api.get<CompanyTask[]>(`/tasks${query ? `?${query}` : ""}`, accessToken ?? undefined),
+    enabled: !!accessToken,
+  });
+}
+
+/** Status change from the company-wide list, where each row belongs to a different project. */
+export function useSetTaskStatus() {
+  const { accessToken } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, taskId, status }: { projectId: string; taskId: string; status: TaskStatus }) =>
+      api.patch<Task>(`/projects/${projectId}/tasks/${taskId}`, { status }, accessToken ?? undefined),
+    onSuccess: (_task, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId] });
     },
   });
 }

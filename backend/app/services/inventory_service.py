@@ -17,6 +17,7 @@ from app.schemas.inventory import (
     TransferRequest,
 )
 from app.services.material_service import get_material
+from app.services.project_service import get_project
 from app.services.warehouse_service import get_warehouse
 
 _IN_TYPES = (InventoryTransactionType.STOCK_IN, InventoryTransactionType.TRANSFER_IN)
@@ -93,6 +94,9 @@ def stock_out(
 ) -> InventoryTransaction:
     get_material(db, company_id, payload.material_id)
     get_warehouse(db, company_id, payload.warehouse_id)
+    if payload.project_id:
+        # Allocations feed per-project reporting (BOQ vs Actual), so the project must be this company's.
+        get_project(db, company_id, payload.project_id)
 
     on_hand = get_stock_on_hand(db, company_id, payload.material_id, payload.warehouse_id)
     if payload.quantity > on_hand:

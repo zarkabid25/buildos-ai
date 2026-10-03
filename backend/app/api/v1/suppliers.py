@@ -11,7 +11,9 @@ from app.schemas.supplier import (
     SupplierContactCreate,
     SupplierContactRead,
     SupplierCreate,
+    SupplierPerformance,
     SupplierRead,
+    SupplierTransaction,
     SupplierUpdate,
 )
 from app.services import supplier_service
@@ -92,3 +94,21 @@ def remove_contact(
     db: Session = Depends(get_db),
 ) -> None:
     supplier_service.remove_contact(db, current_user.company_id, supplier_id, contact_id)
+
+
+@router.get("/{supplier_id}/transactions", response_model=list[SupplierTransaction])
+def list_transactions(
+    supplier_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[SupplierTransaction]:
+    return supplier_service.list_transactions(db, current_user.company_id, supplier_id)
+
+
+@router.get("/{supplier_id}/performance", response_model=SupplierPerformance)
+def supplier_performance(
+    supplier_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SupplierPerformance:
+    return supplier_service.get_performance(db, current_user.company_id, supplier_id)

@@ -10,9 +10,9 @@ from app.models.enums import ProjectStatus
 class ProjectBase(BaseModel):
     name: str = Field(min_length=2, max_length=255)
     code: str = Field(min_length=1, max_length=50)
-    client_name: str | None = None
-    location: str | None = None
-    project_type: str | None = None
+    client_name: str | None = Field(default=None, max_length=255)
+    location: str | None = Field(default=None, max_length=255)
+    project_type: str | None = Field(default=None, max_length=100)
     description: str | None = None
     start_date: date | None = None
     end_date: date | None = None
@@ -24,14 +24,14 @@ class ProjectCreate(ProjectBase):
 
 
 class ProjectUpdate(BaseModel):
-    name: str | None = None
-    client_name: str | None = None
-    location: str | None = None
-    project_type: str | None = None
+    name: str | None = Field(default=None, max_length=255)
+    client_name: str | None = Field(default=None, max_length=255)
+    location: str | None = Field(default=None, max_length=255)
+    project_type: str | None = Field(default=None, max_length=100)
     description: str | None = None
     start_date: date | None = None
     end_date: date | None = None
-    budget: Decimal | None = None
+    budget: Decimal | None = Field(default=None, ge=0)
     status: ProjectStatus | None = None
     progress_percent: int | None = Field(default=None, ge=0, le=100)
 
@@ -68,3 +68,6 @@ class ProjectHealth(BaseModel):
     labor_score: int | None
     procurement_score: int | None
     is_at_risk: bool
+    # How each non-null score was worked out, keyed by dimension (schedule, cost, inventory).
+    # overall_score is the plain average of the non-null dimension scores.
+    basis: dict[str, str] = {}

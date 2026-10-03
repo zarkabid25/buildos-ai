@@ -16,11 +16,22 @@ export function useCreateMaterialRequest() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { inlineError: true },
     mutationFn: (input: {
       project_id: string;
       notes?: string;
       items: { material_id: string; quantity: string }[];
     }) => api.post<MaterialRequest>("/material-requests", input, accessToken ?? undefined),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["material-requests"] }),
+  });
+}
+
+export function useDecideMaterialRequest() {
+  const { accessToken } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "approved" | "rejected" }) =>
+      api.patch<MaterialRequest>(`/material-requests/${id}/status`, { status }, accessToken ?? undefined),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["material-requests"] }),
   });
 }
@@ -38,6 +49,7 @@ export function useCreatePurchaseOrder() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { inlineError: true },
     mutationFn: (input: {
       supplier_id: string;
       project_id?: string;
@@ -65,6 +77,7 @@ export function useReceiveGoods() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { inlineError: true },
     mutationFn: ({
       poId,
       warehouse_id,

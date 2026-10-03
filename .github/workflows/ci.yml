@@ -1,0 +1,102 @@
+# BUILD-140: every push and pull request runs the backend tests (on SQLite and on
+# real Postgres), checks the migration chain against the models, and type-checks
+# and builds the frontend. Deployment is not automated yet (no target chosen).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: migrations
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: pip install -e ".[dev]"
+
+      - name: Migrations build the schema the models expect
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/migrations
+        run: |
+          alembic upgrade head
+          python - <<'EOF'
+          from alembic.autogenerate import compare_metadata
+          from alembic.migration import MigrationContext
+          from sqlalchemy import create_engine
+
+          from app import models  # noqa: F401
+          from app.db.base_class import Base
+
+          # Known, harmless differences: migrations add company_id foreign keys the
+          # models don't declare, and express two unique columns as a constraint
+          # rather than a unique index. Anything else (missing table, column, type,
+          # index) fails the build.
+          ALLOWED = {"remove_fk", "remove_constraint"}
+          UNIQUE_AS_CONSTRAINT = {"ix_companies_code", "ix_users_email"}
+
+          with create_engine("postgresql://ci:ci@localhost:5432/migrations").connect() as conn:
+              diffs = compare_metadata(MigrationContext.configure(conn, opts={"compare_type": True}), Base.metadata)
+          problems = [
+              d for d in diffs
+              if d[0] not in ALLOWED
+              and not (d[0] in ("add_index", "remove_index") and d[1].name in UNIQUE_AS_CONSTRAINT)
+          ]
+          for p in problems:
+              print("schema drift:", p)
+          raise SystemExit(1 if problems else 0)
+          EOF
+          alembic downgrade base
+          alembic upgrade head
+
+      - name: Tests (SQLite)
+        run: pytest -q
+
+      - name: Tests (Postgres)
+        env:
+          PGPASSWORD: ci
+          TEST_DATABASE_URL: postgresql://ci:ci@localhost:5432/suite
+        run: |
+          psql -h localhost -U ci -d migrations -c "CREATE DATABASE suite"
+          pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: https://api.example.com/api/v1
+          NEXT_TELEMETRY_DISABLED: "1"

@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
+import { useFeedback } from "@/components/feedback";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ErrorState, Skeleton } from "@/components/ui/states";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -38,8 +40,9 @@ function formatSize(bytes: number) {
 export default function DocumentsPage() {
   const { user, accessToken, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const { confirm } = useFeedback();
   const [filter, setFilter] = useState<DocumentCategory | "">("");
-  const { data: documents, isLoading } = useDocuments(filter);
+  const { data: documents, isLoading, isError, error: loadError, refetch } = useDocuments(filter);
   const { data: projects } = useProjects();
   const upload = useUploadDocument();
   const remove = useDeleteDocument();
@@ -99,7 +102,13 @@ export default function DocumentsPage() {
   }
 
   async function handleDelete(doc: DocumentItem) {
-    if (!window.confirm(`Delete "${doc.title}"? This can't be undone.`)) return;
+    const ok = await confirm({
+      title: `Delete "${doc.title}"?`,
+      body: "The file is removed from storage. This can't be undone.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     setError(null);
     try {
       await remove.mutateAsync(doc.id);
@@ -195,14 +204,22 @@ export default function DocumentsPage() {
               </tr>
             </thead>
             <tbody>
-              {isLoading && (
+              {isLoading &&
+                [0, 1, 2].map((i) => (
+                  <tr key={i}>
+                    <td colSpan={5} className="px-4 py-3">
+                      <Skeleton className="h-5 w-full" />
+                    </td>
+                  </tr>
+                ))}
+              {isError && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-muted">
-                    Loading...
+                  <td colSpan={5} className="p-3">
+                    <ErrorState error={loadError} onRetry={() => refetch()} />
                   </td>
                 </tr>
               )}
-              {!isLoading && (!documents || documents.length === 0) && (
+              {!isLoading && !isError && (!documents || documents.length === 0) && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-muted">
                     No documents yet.

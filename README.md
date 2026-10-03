@@ -37,6 +37,19 @@ docker compose up --build
 - Backend: http://localhost:8000 (docs at `/docs`, health at `/api/v1/health`)
 - Frontend: http://localhost:3000
 
+That's the development setup (hot reload, source mounted into the containers). For production
+(built images, migrations on start, backups) see [deploy/OPERATIONS.md](deploy/OPERATIONS.md).
+
+## Tests
+
+```bash
+cd backend && pytest                         # SQLite, no setup
+TEST_DATABASE_URL=postgresql://... pytest    # same suite on a disposable Postgres DB
+cd frontend && npx tsc --noEmit && npm run build
+```
+
+CI (`.github/workflows/ci.yml`) runs all of these, plus a check that the migrations build exactly the schema the models expect.
+
 ## Repository layout
 
 ```

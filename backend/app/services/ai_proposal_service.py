@@ -12,6 +12,7 @@ from app.schemas.procurement import MaterialRequestCreate, MaterialRequestItemIn
 from app.services import notification_service, procurement_service
 from app.services.material_service import get_material
 from app.services.project_service import get_project
+from app.services import audit_service
 
 MAX_PROPOSAL_ITEMS = 30
 
@@ -139,6 +140,10 @@ def approve_proposal(db: Session, company_id: uuid.UUID, user: User, proposal_id
         raise
 
     proposal.result_ref = request.id
+    audit_service.record(
+        db, company_id, user.id, "ai_proposal.approved", "ai_proposal", proposal.id,
+        f"AI draft approved: {proposal.summary}", {"material_request_id": str(request.id)},
+    )
     db.commit()
     db.refresh(proposal)
     return proposal
@@ -150,6 +155,10 @@ def reject_proposal(db: Session, company_id: uuid.UUID, user: User, proposal_id:
     proposal.status = AiProposalStatus.REJECTED
     proposal.decided_by_id = user.id
     proposal.decided_at = datetime.now(timezone.utc)
+    audit_service.record(
+        db, company_id, user.id, "ai_proposal.rejected", "ai_proposal", proposal.id,
+        f"AI draft rejected: {proposal.summary}",
+    )
     db.commit()
     db.refresh(proposal)
     return proposal

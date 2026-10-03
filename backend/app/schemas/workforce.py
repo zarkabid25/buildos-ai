@@ -9,18 +9,18 @@ from app.models.enums import AttendanceStatus
 
 class EmployeeCreate(BaseModel):
     full_name: str = Field(min_length=2, max_length=255)
-    designation: str | None = None
-    phone: str | None = None
-    email: str | None = None
+    designation: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=50)
+    email: str | None = Field(default=None, max_length=255)
     daily_wage: Decimal = Field(default=Decimal("0"), ge=0)
     hire_date: date | None = None
 
 
 class EmployeeUpdate(BaseModel):
-    full_name: str | None = None
-    designation: str | None = None
-    phone: str | None = None
-    email: str | None = None
+    full_name: str | None = Field(default=None, max_length=255)
+    designation: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=50)
+    email: str | None = Field(default=None, max_length=255)
     daily_wage: Decimal | None = Field(default=None, ge=0)
     hire_date: date | None = None
     is_active: bool | None = None

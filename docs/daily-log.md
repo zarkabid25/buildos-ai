@@ -493,3 +493,201 @@ Search, settings, reports, UX polish, security hardening, deployment remain. Or 
 
 ### Next
 Settings, reports, UX polish, security hardening, deployment remain. Or verify the AI layer against a real API key if one becomes available.
+
+---
+
+## Day 18 — 2026-10-02 — BOQ vs Actual (BUILD-018)
+
+### Done
+- **BUILD-018** BOQ vs Actual. A BOQ line can now be linked to an inventory material (`boq_items.material_id`, nullable, migration `0015`). `GET /projects/{id}/boq/vs-actual` compares each linked line's planned quantity with the stock **allocated to that project** (the `ALLOCATION` rows in the inventory ledger), giving actual quantity, quantity variance, variance %, and a status (`not_tracked`, `not_started`, `within_plan`, `over_plan`). Materials used on the project that no BOQ line covers are listed separately as unplanned consumption.
+- Actual amount is actual quantity × **BOQ rate**, so the variance is a quantity variance, not a price variance; the response says so in `valuation_note`. Pure arithmetic over the ledger, no estimates (CLAUDE.md rule 11).
+- Linking rules: the material must belong to the same company (404 otherwise), its unit must match the BOQ line's unit (case- and whitespace-insensitive; 400 otherwise, since cement in bags can't be compared with cement in kg), and a material can back only one line per project (409), or its usage would be counted twice. Checked on create, update (including changing the unit of a linked line), and bulk AI-accept.
+- **Tenant fix found along the way:** `POST /inventory/stock-out` accepted a `project_id` without checking the project belonged to the caller's company. Allocations now drive per-project reporting, so it now 404s on a foreign project.
+- Frontend: the BOQ form has an "Inventory material" picker (fills in the unit), server errors are shown under the form, and a **BOQ vs actual** card sits under the BOQ table.
+
+### Tests: 107 passing (12 new, `tests/test_boq_vs_actual_http.py`)
+Hand-checked scenario (100 bags planned, 120 allocated in two stock-outs → +20 / +20.0% / over plan; 40 m3 planned, 30 used → −10 / −25.0% / within plan; totals 2000 planned vs 1950 used at BOQ rate), unlinked and not-started lines, zero planned quantity (no %), unplanned consumption, other projects' allocations and plain stock-outs don't count, unit mismatch, unit change on a linked line, duplicate link (single and bulk), another company's material, allocating to another company's project, and tenant isolation of the endpoint.
+Mutation check: removing the project filter from the allocation query and removing the new stock-out project check each failed the matching test; code restored and green afterwards. Frontend `tsc --noEmit` clean.
+
+### Not verified live, and why
+- The dev Postgres is stamped at Alembic revision `0004` although it already has every table up to notifications (earlier days added them by hand or with `create_all`), so `alembic upgrade head` would try to re-create tables and fail. I didn't run it. The new column still has to be added to the dev DB before the backend is restarted, or BOQ endpoints will 500. Better fix: `alembic stamp 0014` then `alembic upgrade head`.
+- The process on :8000 is not this repo's backend (no `/api/v1` routes), so nothing was tested against a running server this time.
+
+### Same day: supplier history and performance (BUILD-037 done, BUILD-038 partial)
+These were marked "blocked on Purchase Orders", but POs, approval and goods receipt were all built back in Epic 8, so they were no longer blocked.
+- **BUILD-037** `GET /suppliers/{id}/transactions`: every PO placed with the supplier, newest first, with project, status, ordered value, received value (qty received × PO rate), number of goods receipts and the last receipt date.
+- **BUILD-038** `GET /suppliers/{id}/performance`: PO counts (total / approved-or-later / fully received / cancelled), committed value, received value, fulfilment % (received ÷ committed, over approved-or-later POs only, so a pending PO doesn't drag it down), and average lead time (PO creation to first goods receipt). **Partial:** POs have no promised delivery date, so on-time delivery can't be measured, and there is no quality or price-comparison data. The response says this in its `note` instead of showing a made-up score.
+- Frontend: clicking a supplier on `/suppliers` shows its stats and PO history. This replaces the "will appear once POs are built" placeholder.
+- **BUILD-039** (AI supplier insights) is still open. The data exists now; what's missing is the LLM key.
+- Tests: `tests/test_supplier_history_http.py`, 5 new: an empty supplier, ordered vs received across two partial receipts, other suppliers' POs excluded, a hand-checked performance scenario (3 approved POs worth 3000, 1500 received → 50.0%; lead times 4 and 2 days → 3.0; a pending PO not counted as committed), and cross-company 404s. Mutation check: removing the supplier filter and counting pending POs as committed each failed the matching test; code restored. Frontend `tsc` clean, and `/suppliers` and `/projects` compile and serve 200 on the running dev server.
+- Full suite: **112 passed**. One earlier full run had a single failure in `test_notifications_http.py::test_assigning_a_task_notifies_the_assignee`, a file untouched today. That run took 15h51m of wall-clock time, so the machine slept partway through. It passed on its own (12/12) and on a clean full rerun (112/112, 6m24s). My best guess is a token expiring during the sleep, but the traceback wasn't captured, so this is unconfirmed.
+
+### Same day: project health score (BUILD-089, partial)
+- `GET /projects/{id}/health` used to score only the schedule. Two more dimensions now come from modules that exist:
+  - **Cost:** 100 − 2 × forecast overrun % (from the cost summary's earned-value-style forecast), capped to 0–100. Scored only once progress is recorded, the same gate the cost insight uses, because at 0% progress the "forecast" is just spend so far.
+  - **Inventory:** the share of material-linked BOQ lines that are not over plan (from BOQ vs Actual). Unlinked lines don't count.
+- `overall_score` is now the plain average of whichever dimensions have a score (it used to equal the schedule score). A new `basis` field explains each score in words, and the Overview card shows it on hover.
+- **Partial:** quality, safety, labor and procurement stay null. Daily reports and attendance don't hold anything a score could honestly be built from yet.
+- Tests: `tests/test_project_health_http.py`, 7 new: no data gives no scores, a hand-checked cost score (budget 1000, 50% progress, 600 spent → forecast 1200 → 20% over → 60), under budget → 100, no cost score before progress, inventory 1 of 4 over plan → 75, overall = average (schedule 80 and cost 60 → 70), and a cross-company 404. Mutation check: removing the progress gate and counting unlinked BOQ lines each broke the matching tests; code restored. Frontend `tsc` clean, `/projects` serves 200.
+
+---
+
+## Day 19 — 2026-10-03 — Settings (BUILD-103, 104 done; 105, 106 partial)
+
+The previous session ended partway through a full test run after BUILD-089. That run was repeated at the start of this one: **119 passed**.
+
+### Done
+- **BUILD-103 Company settings:** `PATCH /companies/me` already existed but accepted almost anything. It now validates: name at least 2 characters, currency must be a 3-letter ISO code (`^[A-Z]{3}$`), unit system must be `metric` or `imperial`, plus length limits and a proper email. Still admin-only. New **`/settings`** page (the sidebar's "Settings" label is now a link): admins can edit, everyone else sees the values read-only.
+- **BUILD-104 User settings:** `PATCH /auth/me` (own full name only; a `role` in the body is ignored) and `POST /auth/me/password` (checks the current password; new one 8–128 characters). The topbar name updates straight away through a new `updateUser` in the auth context.
+- **BUILD-105 Role permissions (partial):** `GET /users` and `PATCH /users/{id}` (role, active flag), admins only, own company only (another company's user is a 404). Guards: you can't change your own role or deactivate yourself (so an admin can't lock the company out), and only a super admin can grant, change or remove super admin. Deactivation takes effect immediately, because the existing `get_current_user`, login and refresh already reject inactive users. **Why partial:** the role list on the Team section can be managed, but *what each role may do* is still a hardcoded tuple in each router (`CAN_WRITE`, `CAN_APPROVE`...). Making that editable is a real permission-system refactor, not a settings screen. There's also still no invite flow.
+- **BUILD-106 Currency/unit settings (partial):** the company currency now labels every amount in the UI. `formatCurrency` reads it from a value AppShell sets when the company loads, instead of a hardcoded `PKR`, and the "Budget (PKR)" label on project create follows it too. It is a **label, not a conversion**: nothing is converted between currencies, and the page says so. The unit system is saved, but units are free text per material and nothing converts them, which is why this is partial.
+
+### Tests: 20 new (`tests/test_settings_http.py`)
+Company update and read-back; 5 invalid payloads → 422; viewer and PM → 403; settings are per company; name update (trimmed, empty rejected); a smuggled `role` in the profile update is ignored; password change (old password stops working, new one works); wrong current password → 400 and a too-short new one → 422, with the old password still valid afterwards; user list is own-company only and never includes `hashed_password`; non-admins → 403; a role change applies on the next request; a deactivated user is locked out (401 on the existing token, 403 on login); an admin can't demote or deactivate themselves; a company admin can't grant super admin; `role: null` → 422; another company's user → 404 and unaffected.
+Mutation check: removing the self-lockout guard and the super-admin guard each failed its test; code restored, 20/20.
+
+### Not verified
+- The frontend dev server on :3000 was no longer running and the BuildOS backend isn't running either (and still needs the `boq_items.material_id` column, see Day 18). So `/settings` has only been type-checked (`tsc --noEmit` clean), not opened in a browser. ESLint was never configured in this repo (`next lint` asks to set it up), so no lint run.
+- Changing a password doesn't revoke tokens that are already issued (JWTs are stateless here); they stay valid until they expire.
+- **BUILD-107 AI settings (partial):** `/settings` gets a read-only "AI assistant" section: connected or not, provider, model, and the tool-step limit. `/ai/status` now also returns `use_fallbacks` and `max_tool_iterations` (neither is secret) and still never returns the key, not even masked. The existing test that checks this was updated to the new exact shape, and `conftest.py` now pins those two env vars the way it already pinned `LLM_MODEL`. Editing the model or key from the UI isn't built: it would mean storing an encrypted API key per company in the database, which is a security decision to make first, not a default to slip in.
+
+### Same day: reports (BUILD-108..111)
+- New `app/services/report_service.py` and `GET /reports/{projects,inventory,procurement,expenses}`. Every figure reuses the service functions the rest of the app already uses (`get_project_cost_summary`, `get_health`, `get_schedule_variance_days`, `get_total_stock_on_hand`), so a report can't disagree with the screen it summarises. It is pure arithmetic, with no estimates.
+  - **Projects:** budget, committed (POs), spent (expenses), forecast, expected variance, schedule variance in days, health score, open and overdue tasks.
+  - **Inventory:** on hand **now** plus ok/low/out status, and received (stock-in and goods receipts) vs issued (stock-out and allocations) **in the period**. Transfers between warehouses are counted in neither, because they don't change the company total.
+  - **Procurement:** PO count and value by status, ordered vs received per supplier, material requests by status, filtered by creation date.
+  - **Expenses:** grouped by project × category (uncategorized shown as such), filtered by `expense_date`, plus totals per category.
+- The period is `date_from`/`date_to`, inclusive, as whole **UTC** days (except expenses, which use their plain `expense_date`); `date_from > date_to` → 400. `?format=csv` returns the row table as a CSV attachment, with commas in names quoted properly; any other format → 422. Access matches the existing financial read endpoints: any signed-in user in the company.
+- Frontend: a **`/reports`** page (sidebar "Reports") with four tabs, date pickers where they apply, summary tiles, and Print and Download CSV buttons.
+- **Not built:** PDF export (it would need a new dependency; Print → Save as PDF from the browser covers it for now) and **BUILD-112 AI executive report** (needs the LLM key).
+- Tests: `tests/test_reports_http.py`, 9 new: the project report equals the cost summary field for field, plus the health score and task counts; inventory balances and movements with a transfer and both kinds of issue; the period filters movements but not the balance, including a row at 23:30 UTC on the last day; procurement status breakdown and per-supplier ordered vs received; a procurement period; the expense grouping and period (a June expense excluded from May); bad periods → 400; CSV quoting and 422 on an unknown format; and tenant isolation on all four reports. Mutation check: removing the tenant filter on the expense report and counting transfers as received each failed its test; code restored.
+
+### How the new pages were checked
+- `tsc --noEmit` clean. Your running :3000 dev server compiles and serves `/settings`, `/reports` and `/projects` (200).
+- I tried a full browser check with a second copy of the app (backend on :8001 with a scratch SQLite DB, seeded through the API, and frontend on :3001). The backend side worked, but when the :3000 dev server came back up, both Next servers were sharing `frontend/.next` and fighting over its cache, so I stopped mine before it could corrupt yours. Pages have **not** been clicked through in a browser.
+- The BuildOS backend on :8000 is now running this code against the dev Postgres, which still doesn't have `boq_items.material_id` (see Day 18). Until it's added, the BOQ tab, project health, dashboard insights and the project report will 500 there.
+
+---
+
+## Day 20 — 2026-10-04 — UX polish (BUILD-113..119 done, 120 partial)
+
+### The problems this fixes
+A survey of every page found three real bugs, not just polish:
+1. **Failures looked like empty data.** Equipment, workforce, inventory and procurement rendered "No X yet" whenever `data` was undefined, so a slow load or a dead backend looked exactly like an empty company. The dashboard's insights card said "Checking your projects…" forever if insights failed, which is exactly what happens on the current dev DB until `boq_items.material_id` exists.
+2. **Failed saves were silent.** Eleven handlers did `await mutation.mutateAsync(...)` with no error handling: nothing on screen, plus an unhandled promise rejection.
+3. **422s showed "[object Object]".** FastAPI sends a list of field errors for validation failures, and `ApiError` stringified it.
+
+### Done
+- **Errors (117):** `api.ts` turns 422 details into "field: message; …". A global `MutationCache.onError` shows a toast for any failed mutation, except the 17 hooks whose pages already show the error next to the form (tagged `meta: { inlineError: true }`, so nothing is reported twice). A small `attempt()` helper stops those 11 handlers early without an unhandled rejection. Queries: shared `ErrorState` with **Try again** on every main list, the dashboard, the project page, insights and the four reports. Queries no longer retry 4xx at all, and retry 5xx/network failures once instead of three times: against a dead backend the error now shows after about 6 s instead of about 28 s (measured).
+- **Loading, skeletons, empty (114–116):** `components/ui/states.tsx` provides `Skeleton`, `TableSkeleton`, `EmptyState`, `ErrorState` and `QueryView` (loading → error → empty → content), applied to equipment, workforce, inventory stock, material requests, purchase orders, projects, suppliers, documents, dashboard, insights and reports.
+- **Toasts (118) and confirmations (119):** `components/feedback.tsx`, a small provider with no new dependency. Toasts: at most three, errors stay longer, `aria-live`. Confirm dialog: focuses Cancel, Escape and a backdrop click cancel, `role="alertdialog"`. Confirmations now cover deleting a document and deactivating a user (both were `window.confirm`), plus removing a BOQ line, **approving a PO** (it states the amount being committed) and approving or rejecting an AI draft (it says a real material request will be created). Removing a task dependency is easy to undo, so it has no confirmation.
+- **Responsive (113):** below `md` the sidebar becomes a drawer, with a menu button, backdrop, Escape to close and auto-close on navigation. Padding shrinks, the user's name is hidden on very small screens, the search and notification dropdowns are capped to the screen width, and project/report tab rows scroll sideways.
+- Small fixes found while checking: the inventory forecast card no longer says "No materials to forecast yet" while loading, and supplier names are left-aligned now that they're buttons.
+- **BUILD-120 partial:** server validation is now readable everywhere, and several forms check up front (currency, password length, date range). Only project create uses zod on the client, and converting every form to react-hook-form + zod is a larger change for a later pass.
+
+### How it was checked
+- `tsc --noEmit` clean, and the backend suite is unchanged at 148 passing (no backend change today).
+- **In a real browser this time**, against an isolated copy: the frontend copied to a scratch folder (to avoid sharing `.next` with the :3000 dev server) on :3001, plus a throwaway backend on :8001 with a scratch SQLite DB seeded through the API. Checked: the dashboard renders real data; at 375px the sidebar is hidden, the drawer opens, and navigating closes it; supplier history shows 60.0% received and PKR 700K committed; project health is 70/60/100 → overall 77, matching the hand calculation; BOQ vs actual shows 150 of 200 bags (−25.0%, within plan); a unit-mismatch BOQ line shows the server message inline with no duplicate toast; Remove opens the dialog and Escape keeps the line; an expense of 0 shows the toast "amount: Input should be greater than 0"; with the backend stopped, lists show the retryable error instead of "No X yet". The console had no unhandled rejections, only the expected 400/422 network entries and one `getComputedStyle` error from an injected script that isn't app code.
+
+---
+
+## Day 21 — 2026-10-05 — Security (BUILD-121..124, 126 done; 125 partial)
+
+The previous session stopped partway through a test run. Nothing was lost; work picked up at BUILD-121.
+
+### BUILD-121 API authorization
+`tests/test_api_authorization_http.py` reads every operation from the OpenAPI schema (this FastAPI version, 0.141, includes routers lazily, so `app.routes` doesn't list them), fills path parameters with random UUIDs, and calls each one with **no token** and with a **forged token**. Every one of the ~120 non-public operations answered 401. The public allow-list is exactly 4 (health, register, login, refresh). A new route without auth fails this test automatically. It's written as one looping test per case rather than 240 parametrized tests, because each test resets the database and the parametrized version added about 7 minutes to the suite.
+
+### BUILD-122 Tenant isolation, with 4 real leaks fixed
+I audited every ID a client can send in a request body against the service that receives it. Fixed:
+- **Task `assignee_id`** wasn't checked. Assigning a task to another company's user worked, **and sent that user a notification containing the task title and project name**. Now 404, and no notification is sent.
+- **Expense `category_id`** wasn't checked, and the expense report joined categories without a company filter, so another company's category name could show up in a report. Both fixed.
+- **Material `category_id`** and **equipment `current_project_id`** weren't checked. Now 404.
+Tests: `tests/test_tenant_references_http.py`. Mutation check: disabling the assignee check fails the test.
+
+### BUILD-123 Input validation
+- SQLite (the test DB) ignores `VARCHAR(n)`, but Postgres rejects over-long values with an error, so **41 request fields across 12 schemas** without a `max_length` were 500s waiting to happen in production. All now have limits matching their columns, and `tests/test_schema_limits.py` compares every request schema against the column sizes, so a new field can't regress.
+- Update schemas make every field optional, which also lets a client send `null`. For a NOT NULL column that was an `IntegrityError` (a 500). Verified by disabling the fix: `NOT NULL constraint failed: projects.name`. A new `app/db/updates.apply_changes()` reads nullability from the model's columns and returns 422. It replaces the copy loop in 12 services. Clearing an optional field (e.g. `client_name: null`) still works.
+
+### BUILD-124 Upload validation
+The allow-list trusted the client's Content-Type, so an executable or HTML page could be stored as a "PDF". Uploads now check the bytes: PDF/PNG/JPEG/WEBP signatures; `.docx`/`.xlsx` must be real Office zip packages (`word/document.xml` / `xl/workbook.xml`); `.doc`/`.xls` must have the OLE2 header; text/CSV must contain no NUL bytes. UTF-8 isn't required, so cp1252 CSVs from Excel still work. A mismatch is 415 and nothing is stored. The existing `.docx` test was uploading a fake zip header, so it now builds a real minimal `.docx`. No virus scanning (that would need an external service).
+
+### BUILD-125 Rate limiting (partial)
+- **Login:** 5 *failed* attempts per (IP, email) per 15 minutes, then 429 with `Retry-After`. Once locked, even the right password is refused until the window passes, otherwise the limit would tell an attacker when a guess was right. Success clears the count, and email case doesn't get around it.
+- **Register:** 10 per IP per hour. **Password change:** 5 wrong current passwords per user per 15 minutes, so a stolen session can't guess the real password.
+- **Why partial:** counters live in process memory (`app/core/rate_limit.py`). That's correct for today's single uvicorn process, but separate workers or containers would each count separately. Redis is in docker-compose and the limiter has a three-method interface ready to move there. It's also keyed on the client IP as uvicorn sees it, so behind a reverse proxy it needs the proxy's forwarded-IP header configured, which is a deployment (Epic 26) item.
+
+### BUILD-126 Audit log
+- `audit_log` table (migration `0016`), written in **the same transaction** as the change it describes, so it can't record something that was rolled back (tested: a refused second approval leaves no entry). Recorded: PO created/approved (with totals rounded to the cent), goods received, material request approved/rejected, AI draft approved/rejected, expense recorded, role changed, user deactivated/reactivated, company settings (only fields that actually changed, with before and after), document deleted, BOQ line deleted. No-op changes aren't logged. The inventory ledger was already append-only with `created_by`, so it isn't duplicated here.
+- `GET /audit-log` (admins only, own company, filter by entity type). There are deliberately **no** update/delete endpoints, and a test asserts that. Settings shows an "Activity log" section for admins.
+- Tests: `tests/test_audit_log_http.py` (7).
+- Full suite: **177 passed** (it took 16 minutes on a busy machine). Frontend `tsc` clean.
+- **Dev DB:** like `boq_items.material_id` (Day 18), the new `audit_log` table (migration `0016`) has to be created in the dev Postgres before the running backend is used. Every audited action writes to it, so creating or approving POs, expenses, role/settings changes and document/BOQ deletes fail until it exists.
+
+---
+
+## Day 22 — 2026-10-06 — Testing (BUILD-127..132 done; 133 still partial; 134 waiting on a decision)
+
+### What was missing
+Inventory, procurement and project/cost logic, the math CLAUDE.md rule 15 names explicitly, had **no dedicated tests**; they were only exercised on the side by other suites. Writing them found **6 bugs**:
+
+**Procurement (BUILD-131), `tests/test_procurement_http.py` (16 tests):**
+1. The material-request status endpoint accepted *any* status, so a request could be set to "converted" without a PO, or back to "pending". It now only approves or rejects (400 otherwise).
+2. Raising a PO from an **approved** request left it "approved" (only *pending* ones were marked converted), so the normal path never closed the request, and a PO could even be raised from a **rejected** or already-converted one. Now a PO can only come from a pending or approved request (409 otherwise), and the request becomes "converted" either way. The request is checked *before* the PO is created.
+- Product gap found along the way: **there was no way to approve or reject a material request in the UI**, though approvers were being notified to do it. `/procurement` now has Approve/Reject buttons for the approver roles (reject asks for confirmation).
+
+**Projects (BUILD-132), `tests/test_projects_finance_http.py` (16 tests):**
+3. A **negative budget** was accepted on update (create already refused it).
+4. An **end date before the start date** was accepted, which breaks schedule variance and the Gantt. Now 422, checked on the combined values since an update may change only one date.
+5. **Deleting a project that has records** returned 204 on SQLite and left orphaned expenses. On Postgres it would be a foreign-key error (a 500). It's now a 409 naming what's attached ("This project still has expenses. Set its status to cancelled instead."). The list of referencing tables comes from the model metadata, so new tables are covered automatically.
+6. Related, and the root cause of #5 going unnoticed: **SQLite doesn't enforce foreign keys unless told to**, so the whole suite had been more permissive than Postgres. `conftest.py` now turns enforcement on (and a test checks it really is on). The full suite still passed with it on, so no other test was relying on a dangling reference.
+
+**Inventory (BUILD-130), `tests/test_inventory_http.py` (10 tests):** balances as the sum of movements (including fractional quantities), insufficient stock per warehouse, exact-to-zero withdrawal, transfers as two linked rows that conserve the total, positive quantities only, allocations, dashboard low/out-of-stock counts at the boundary, history order and author, roles, tenant isolation. No bugs found.
+
+**Unit tests (BUILD-127), `tests/test_units.py` (27):** schedule variance (behind, ahead, capped past the end, no dates, zero length, not started), the upload content check (15 cases), the rate limiter (window, `Retry-After`, independent keys) and `apply_changes`.
+
+### Not done
+- **BUILD-134 frontend tests:** the frontend has no test runner. A browser-level suite (e.g. Playwright, driving the real app against a seeded backend) is the right tool for "critical flows", but it's a new dev dependency plus browser downloads, so it needs a decision first (CLAUDE.md rule 17). Until then the flows were checked by hand in a browser on Day 20.
+- **BUILD-133** stays partial: real model behaviour can't be tested without an API key.
+
+Full suite: **219 passed** with foreign keys enforced (24 minutes on this machine), plus the 27 unit tests run separately. Frontend `tsc` clean.
+
+---
+
+## Day 23 — 2026-10-07 — Deployment groundwork (BUILD-137, 141 done; 135, 140, 142 partial; 136, 138, 139 need decisions)
+
+### The most important finding: the migration chain was never proven
+The dev database was built partly with `create_all` and hand-written `ALTER`s (it's stamped at revision 0004 but has every table), so nobody knew whether `alembic upgrade head` on an **empty** database, which is exactly what production will do, actually produces the schema the code expects. I checked on a **throwaway Postgres 17 cluster** (own data directory in a scratch folder, port 5499; the real dev server wasn't touched):
+- 0001 → 0016 runs cleanly. A full downgrade to empty and back up also works.
+- Comparing the result with the models (Alembic's `compare_metadata`) found **no missing tables, columns or wrong types**. The only differences are harmless: the migrations add `company_id` foreign keys the models don't declare (the DB is stricter), and two unique columns use a constraint instead of a unique index. Plus one real gap: **`attendance` and `employee_project_assignments` never got their `company_id` index** (every query on them filters by company). Migration **0017** adds them, and it goes up, down and up again cleanly.
+- **The whole test suite then ran against that real Postgres: 256 passed** (1 skipped, the SQLite-only FK guard). `conftest.py` now takes an opt-in `TEST_DATABASE_URL` for this. The default is still SQLite, because the Postgres run takes about 50 minutes here.
+
+### Done
+- **BUILD-137 Environment configuration:** with `ENVIRONMENT=production` the backend **refuses to start** if the JWT secret is the published default or shorter than 32 characters, the database URL uses the example password, or CORS allows localhost. Development is unaffected (the dev `.env` says `development`, checked). `deploy/.env.production.example` documents every value. **`.gitignore` didn't actually cover `.env.production`**: its patterns only matched `.env` and `*.env`. It now ignores every `.env.*` except the examples (verified with `git check-ignore`) and `backups/`.
+- **BUILD-141 Backups:** `deploy/backup.sh` dumps the database (`pg_dump` custom format) **and** archives uploaded files. Documents and photos live on disk, so a database dump alone isn't a backup. Each file is written under a temporary name, checked readable (`pg_restore --list` / `tar -t`), then renamed, and old ones are pruned after `KEEP_DAYS`. Restore steps are in `deploy/OPERATIONS.md`. `.gitattributes` keeps `*.sh` LF so the script works when checked out on Windows. Only syntax-checked here (`bash -n`): there's no Docker on this machine to run it against the stack.
+
+### Partial
+- **BUILD-135 Production Docker:** `backend/Dockerfile.prod` (non-root, no compiler, migrations on start, **one worker** because of the in-memory rate limiter, `--proxy-headers` trusting only `FORWARDED_ALLOW_IPS`), `frontend/Dockerfile.prod` (multi-stage, real `next build`, dev deps pruned, non-root), `.dockerignore`s, and `deploy/docker-compose.prod.yml` (no source mounts, DB/Redis not published, persistent `uploads` volume, backend healthcheck on `/health/ready`). **Not built:** Docker isn't installed here. What *was* verified: the production `next build` passes (all 17 routes, run in an isolated copy so the dev server's `.next` wasn't touched), and the migrations run on a fresh Postgres.
+- **BUILD-140 CI:** `.github/workflows/ci.yml` runs the backend tests on SQLite **and** on a Postgres service, a **migration-drift check** that fails the build if the migrated schema stops matching the models (checked both ways: passes now, fails when I dropped a column), and the frontend `tsc` and `next build`. **CD** isn't set up because there's no deployment target yet. Not yet run on GitHub, since nothing has been pushed.
+- **BUILD-142 Logging/monitoring:** one log line per request (`request_id method path status duration_ms`, **never the query string**), an `X-Request-ID` header on every response (an ID from a proxy is kept if it looks sane), 5xx logged at warning level, `LOG_LEVEL` setting, and a public **`/health/ready`** that checks the database and returns 503 when it's unreachable. Tests: `tests/test_ops_http.py` (5). No metrics or alerting service, since none has been chosen.
+
+### Needs a decision
+- **BUILD-136** containerised vs managed Postgres, **BUILD-138** which S3-compatible storage, **BUILD-139** domain and reverse proxy/TLS. `deploy/OPERATIONS.md` explains what each choice changes.
+
+---
+
+## Day 24 — 2026-10-08 — The greyed-out sidebar modules are live
+
+Zark asked why BOQ, Tasks, Schedule, Daily Reports, Budgets, Expenses and Project Costs were greyed out. The features were already built, but only as **tabs inside each project**. The Day 1 sidebar listed them as company-wide pages that were never built, so they were shown disabled (`href: null`) rather than as dead links. That was accurate but confusing, because the work existed. All seven are now real pages:
+
+- **Per project, with a project picker** (`components/project-scoped-page.tsx`): **BOQ**, **Schedule**, **Daily Reports**, **Project Costs**. They reuse the exact panels from the project tabs (`BoqPanel` and `CostsPanel` moved out of the project page into `components/`, which cut that page from about 640 to 332 lines). The picker remembers the last project across these pages and supports `?project=<id>` links (Budgets links rows to Project Costs this way). It reads the URL directly rather than with `useSearchParams`, which would need a Suspense boundary to pass `next build`.
+- **Across all projects:**
+  - **Tasks:** new `GET /tasks` (filters `mine`, `status`, `project_id`; open work first, then by due date, undated last; includes project and assignee names). Overdue tasks are flagged, and status can be changed inline. Tests: `tests/test_company_tasks_http.py` (3), plus the existing authorization sweep picked up the new route automatically.
+  - **Budgets:** budget vs spent vs committed for every project, with a "% used or committed" bar and the forecast variance. It uses the same numbers as the project report and the Costs tab.
+  - **Expenses:** every expense across projects, filterable by project, with a form to record one. It also adds the **first UI for expense categories**: the API supported them, but nothing could create or pick one, so every expense showed as "Uncategorized" in reports. The form appears only for roles allowed to record expenses (the API enforces this anyway).
+
+### A real bug found while testing: dates were a day behind in the morning
+Several forms defaulted their date with `new Date().toISOString().slice(0, 10)`, which is the **UTC** date. In Pakistan (UTC+5) that's yesterday until 5 am, so **attendance and daily reports defaulted to the wrong day** for early shifts (and so did the new expense form and the overdue check on Tasks). Replaced all four with `localToday()` in `lib/utils.ts`. Confirmed in the browser at 00:xx local time: the form showed 2026-10-04 while UTC was still 2026-10-03.
+
+### Checked
+In a browser against an isolated copy (frontend on :3001 in a scratch folder, throwaway backend on :8001 with seeded data; the :3000/:8000 dev servers and the dev DB untouched): every sidebar item is a link; Tasks lists across projects, flags overdue, and an inline status change re-sorts the list; BOQ switches project and shows BOQ vs actual; Schedule keeps the chosen project and shows 18 days behind (checked by hand: 50% elapsed vs 35% done over 120 days); Daily Reports and Project Costs show the right project's data; Budgets totals match; Expenses creates a category, records an expense under it and updates the total. No console errors. All seven pages also compile and serve 200 on the :3000 dev server. Frontend `tsc` clean; task-related backend suites 45/45.

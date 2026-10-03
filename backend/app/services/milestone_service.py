@@ -4,6 +4,7 @@ from datetime import date
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.db.updates import apply_changes
 from app.models.milestone import Milestone
 from app.schemas.milestone import MilestoneCreate, MilestoneUpdate
 from app.services.project_service import get_project
@@ -53,8 +54,7 @@ def update_milestone(
     if updates.get("is_completed") and not milestone.is_completed and "completed_date" not in updates:
         updates["completed_date"] = date.today()
 
-    for field, value in updates.items():
-        setattr(milestone, field, value)
+    apply_changes(milestone, updates)
     db.commit()
     db.refresh(milestone)
     return milestone

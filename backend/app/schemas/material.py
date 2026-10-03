@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class MaterialCategoryBase(BaseModel):
     name: str = Field(min_length=1, max_length=255)
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=500)
 
 
 class MaterialCategoryCreate(MaterialCategoryBase):
@@ -33,9 +33,9 @@ class MaterialCreate(MaterialBase):
 
 
 class MaterialUpdate(BaseModel):
-    name: str | None = None
-    sku: str | None = None
-    unit: str | None = None
+    name: str | None = Field(default=None, max_length=255)
+    sku: str | None = Field(default=None, max_length=50)
+    unit: str | None = Field(default=None, max_length=20)
     category_id: uuid.UUID | None = None
     reorder_point: int | None = Field(default=None, ge=0)
 

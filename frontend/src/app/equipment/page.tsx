@@ -7,7 +7,9 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState, QueryView } from "@/components/ui/states";
 import { useAuth } from "@/lib/auth-context";
+import { attempt } from "@/lib/utils";
 import {
   useCreateEquipment,
   useEquipmentList,
@@ -27,7 +29,7 @@ const STATUS_CLASSES: Record<EquipmentStatus, string> = {
 export default function EquipmentPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const { data: equipmentList } = useEquipmentList();
+  const equipmentQuery = useEquipmentList();
   const { data: reminders } = useMaintenanceReminders();
   const createEquipment = useCreateEquipment();
   const updateStatus = useUpdateEquipmentStatus();
@@ -42,7 +44,7 @@ export default function EquipmentPage() {
 
   async function handleAdd() {
     if (!form.name) return;
-    await createEquipment.mutateAsync(form);
+    if (!(await attempt(createEquipment.mutateAsync(form)))) return;
     setForm({ name: "", equipment_type: "" });
   }
 
@@ -82,45 +84,46 @@ export default function EquipmentPage() {
           </div>
         </Card>
 
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Type</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(!equipmentList || equipmentList.length === 0) && (
-                <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-sm text-muted">
-                    No equipment yet.
-                  </td>
-                </tr>
-              )}
-              {equipmentList?.map((eq) => (
-                <tr key={eq.id} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3 font-medium text-ink">{eq.name}</td>
-                  <td className="px-4 py-3 text-muted">{eq.equipment_type ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <select
-                      className={`h-7 rounded-full border-0 px-2 text-xs font-medium ${STATUS_CLASSES[eq.status]}`}
-                      value={eq.status}
-                      onChange={(e) =>
-                        updateStatus.mutate({ id: eq.id, status: e.target.value as EquipmentStatus })
-                      }
-                    >
-                      {STATUS_OPTIONS.map((s) => (
-                        <option key={s} value={s}>{s.replace("_", " ")}</option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+        <QueryView
+          query={equipmentQuery}
+          isEmpty={(list) => list.length === 0}
+          empty={<EmptyState title="No equipment yet" hint="Add your first machine or tool above." />}
+        >
+          {(equipmentList) => (
+            <Card className="overflow-x-auto p-0">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+                    <th className="px-4 py-3 font-medium">Name</th>
+                    <th className="px-4 py-3 font-medium">Type</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {equipmentList.map((eq) => (
+                    <tr key={eq.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-3 font-medium text-ink">{eq.name}</td>
+                      <td className="px-4 py-3 text-muted">{eq.equipment_type ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <select
+                          className={`h-7 rounded-full border-0 px-2 text-xs font-medium ${STATUS_CLASSES[eq.status]}`}
+                          value={eq.status}
+                          onChange={(e) =>
+                            updateStatus.mutate({ id: eq.id, status: e.target.value as EquipmentStatus })
+                          }
+                        >
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s} value={s}>{s.replace("_", " ")}</option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
+        </QueryView>
       </div>
     </AppShell>
   );

@@ -10,11 +10,13 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/states";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api";
 import { projectCreateSchema, type ProjectCreateInput } from "@/lib/project-schema";
 import { useCreateProject, useProjects } from "@/lib/use-projects";
+import { useCompany } from "@/lib/use-settings";
 import { formatCurrency, STATUS_CLASSES, STATUS_LABELS } from "@/lib/utils";
 
 export default function ProjectsPage() {
@@ -23,8 +25,9 @@ export default function ProjectsPage() {
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const { data: projects, isLoading } = useProjects();
+  const { data: projects, isLoading, isError, error, refetch } = useProjects();
   const createProject = useCreateProject();
+  const { data: company } = useCompany();
 
   const {
     register,
@@ -93,7 +96,7 @@ export default function ProjectsPage() {
                 <Input id="end_date" type="date" {...register("end_date")} />
               </div>
               <div>
-                <Label htmlFor="budget">Budget (PKR)</Label>
+                <Label htmlFor="budget">Budget ({company?.currency ?? "PKR"})</Label>
                 <Input id="budget" type="number" step="0.01" {...register("budget")} />
               </div>
               {formError && <p className="col-span-full text-sm text-danger">{formError}</p>}
@@ -106,12 +109,14 @@ export default function ProjectsPage() {
           </Card>
         )}
 
-        {isLoading && <p className="text-sm text-muted">Loading projects...</p>}
+        {isLoading && <TableSkeleton />}
+        {isError && <ErrorState error={error} onRetry={() => refetch()} />}
 
         {!isLoading && projects && projects.length === 0 && (
-          <Card className="text-center text-sm text-muted">
-            No projects yet. Create your first project to start tracking BOQ, inventory and cost.
-          </Card>
+          <EmptyState
+            title="No projects yet"
+            hint="Create your first project to start tracking BOQ, inventory and cost."
+          />
         )}
 
         {!isLoading && projects && projects.length > 0 && (

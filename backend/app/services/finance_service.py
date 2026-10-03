@@ -1,6 +1,7 @@
 import uuid
 from decimal import Decimal
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.enums import PurchaseOrderStatus
@@ -8,6 +9,7 @@ from app.models.expense import Expense, ExpenseCategory
 from app.models.procurement import PurchaseOrder
 from app.schemas.expense import ExpenseCategoryCreate, ExpenseCreate, ProjectCostSummary
 from app.services.project_service import get_project
+from app.services import audit_service
 
 # ---- Expense categories -----------------------------------------------------
 
@@ -43,8 +45,22 @@ def create_expense(
     db: Session, company_id: uuid.UUID, user_id: uuid.UUID, payload: ExpenseCreate
 ) -> Expense:
     get_project(db, company_id, payload.project_id)
+    if payload.category_id:
+        category = (
+            db.query(ExpenseCategory)
+            .filter(ExpenseCategory.company_id == company_id, ExpenseCategory.id == payload.category_id)
+            .first()
+        )
+        if not category:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Expense category not found")
     expense = Expense(company_id=company_id, created_by_id=user_id, **payload.model_dump())
     db.add(expense)
+    db.flush()
+    audit_service.record(
+        db, company_id, user_id, "expense.created", "expense", expense.id,
+        f"Expense of {payload.amount:,.2f} recorded for {payload.expense_date}",
+        {"project_id": str(payload.project_id), "amount": str(payload.amount)},
+    )
     db.commit()
     db.refresh(expense)
     return expense

@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     ai,
+    audit,
     auth,
     boq,
     companies,
@@ -18,10 +19,12 @@ from app.api.v1 import (
     procurement,
     project_members,
     projects,
+    reports,
     schedule,
     search,
     suppliers,
     tasks,
+    users,
     warehouses,
     workforce,
 )
@@ -30,10 +33,14 @@ api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(auth.router)
 api_router.include_router(companies.router)
+api_router.include_router(users.router)
+api_router.include_router(reports.router)
+api_router.include_router(audit.router)
 api_router.include_router(projects.router)
 api_router.include_router(project_members.router)
 api_router.include_router(milestones.router)
 api_router.include_router(tasks.router)
+api_router.include_router(tasks.company_router)
 api_router.include_router(boq.router)
 api_router.include_router(materials.router)
 api_router.include_router(warehouses.router)

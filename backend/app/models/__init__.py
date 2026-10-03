@@ -39,3 +39,4 @@ from app.models.notification import Notification  # noqa: F401
 from app.models.material import MaterialCategory, Material  # noqa: F401
 from app.models.warehouse import Warehouse  # noqa: F401
 from app.models.inventory_transaction import InventoryTransaction  # noqa: F401
+from app.models.audit import AuditLog  # noqa: F401

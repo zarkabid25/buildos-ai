@@ -4,20 +4,25 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
+import { SupplierActivityPanel } from "@/components/supplier-activity-panel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/states";
 import { useAuth } from "@/lib/auth-context";
+import { attempt } from "@/lib/utils";
 import { useCreateSupplier, useSuppliers } from "@/lib/use-suppliers";
 
 export default function SuppliersPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const { data: suppliers, isLoading } = useSuppliers();
+  const { data: suppliers, isLoading, isError, error, refetch } = useSuppliers();
   const createSupplier = useCreateSupplier();
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", email: "", address: "" });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = suppliers?.find((s) => s.id === selectedId);
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
@@ -27,7 +32,7 @@ export default function SuppliersPage() {
 
   async function handleCreate() {
     if (!form.name.trim()) return;
-    await createSupplier.mutateAsync(form);
+    if (!(await attempt(createSupplier.mutateAsync(form)))) return;
     setForm({ name: "", phone: "", email: "", address: "" });
     setShowForm(false);
   }
@@ -57,12 +62,11 @@ export default function SuppliersPage() {
           </Card>
         )}
 
-        {isLoading && <p className="text-sm text-muted">Loading suppliers...</p>}
+        {isLoading && <TableSkeleton />}
+        {isError && <ErrorState error={error} onRetry={() => refetch()} />}
 
         {!isLoading && suppliers && suppliers.length === 0 && (
-          <Card className="text-center text-sm text-muted">
-            No suppliers yet. Add your first vendor above.
-          </Card>
+          <EmptyState title="No suppliers yet" hint="Add your first vendor above." />
         )}
 
         {!isLoading && suppliers && suppliers.length > 0 && (
@@ -78,8 +82,15 @@ export default function SuppliersPage() {
               </thead>
               <tbody>
                 {suppliers.map((s) => (
-                  <tr key={s.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-3 font-medium text-ink">{s.name}</td>
+                  <tr
+                    key={s.id}
+                    className={`border-b border-border last:border-0 ${s.id === selectedId ? "bg-blue-50/60" : ""}`}
+                  >
+                    <td className="px-4 py-3 font-medium">
+                      <button className="text-left text-ink hover:text-primary" onClick={() => setSelectedId(s.id)}>
+                        {s.name}
+                      </button>
+                    </td>
                     <td className="px-4 py-3 text-muted">{s.phone ?? "—"}</td>
                     <td className="px-4 py-3 text-muted">{s.email ?? "—"}</td>
                     <td className="px-4 py-3 text-muted">{s.address ?? "—"}</td>
@@ -90,11 +101,14 @@ export default function SuppliersPage() {
           </Card>
         )}
 
-        <Card className="border-border bg-gray-50/60 text-sm text-muted">
-          Performance scoring (price/quality/delivery/reliability) and order history will appear
-          here once Purchase Orders are built — those numbers need real order data behind them,
-          not placeholders.
-        </Card>
+        {selected ? (
+          <SupplierActivityPanel supplierId={selected.id} supplierName={selected.name} />
+        ) : (
+          suppliers &&
+          suppliers.length > 0 && (
+            <p className="text-sm text-muted">Select a supplier to see its purchase orders and performance.</p>
+          )
+        )}
       </div>
     </AppShell>
   );

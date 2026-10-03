@@ -24,4 +24,4 @@ def update_my_company(
     current_user: User = Depends(require_roles(UserRole.COMPANY_ADMIN, UserRole.SUPER_ADMIN)),
     db: Session = Depends(get_db),
 ) -> CompanyRead:
-    return company_service.update_company(db, current_user.company_id, payload)
+    return company_service.update_company(db, current_user.company_id, current_user.id, payload)

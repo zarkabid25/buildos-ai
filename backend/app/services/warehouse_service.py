@@ -3,6 +3,7 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.db.updates import apply_changes
 from app.models.warehouse import Warehouse
 from app.schemas.warehouse import WarehouseCreate, WarehouseUpdate
 
@@ -39,8 +40,7 @@ def update_warehouse(
     db: Session, company_id: uuid.UUID, warehouse_id: uuid.UUID, payload: WarehouseUpdate
 ) -> Warehouse:
     warehouse = get_warehouse(db, company_id, warehouse_id)
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(warehouse, field, value)
+    apply_changes(warehouse, payload.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(warehouse)
     return warehouse

@@ -6,13 +6,14 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { InsightsList, RulesNote } from "@/components/insights-list";
 import { Card } from "@/components/ui/card";
+import { ErrorState, Skeleton } from "@/components/ui/states";
 import { useAuth } from "@/lib/auth-context";
 import { useInsights } from "@/lib/use-ai";
 
 export default function AiInsightsPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const { data, isLoading } = useInsights();
+  const { data, isLoading, isError, error, refetch } = useInsights();
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
@@ -28,8 +29,15 @@ export default function AiInsightsPage() {
           <p className="text-muted">What needs attention across schedule, cost, inventory, equipment and procurement.</p>
         </div>
 
+        {isError && <ErrorState error={error} onRetry={() => refetch()} />}
         <Card>
-          {isLoading && <p className="text-sm text-muted">Checking your projects...</p>}
+          {isLoading && (
+            <div className="space-y-3">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          )}
           {data && (
             <>
               <div className="mb-4 grid grid-cols-3 gap-3">

@@ -49,7 +49,7 @@ export function GlobalSearch() {
       />
 
       {showDropdown && (
-        <div className="absolute left-0 top-9 z-20 max-h-96 w-96 overflow-y-auto rounded-card border border-border bg-surface shadow-lg">
+        <div className="absolute left-0 top-9 z-20 max-h-96 w-96 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-card border border-border bg-surface shadow-lg">
           {isFetching && <p className="px-3 py-4 text-sm text-muted">Searching...</p>}
           {nothingFound && <p className="px-3 py-4 text-sm text-muted">No matches for &ldquo;{debounced}&rdquo;.</p>}
           {data &&

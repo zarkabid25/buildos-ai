@@ -5,6 +5,17 @@ from pathlib import Path
 PDF = b"%PDF-1.4\n" + b"1 0 obj\n<<>>\nendobj\n" * 8
 
 
+def minimal_docx() -> bytes:
+    """Uploads are checked against their real content now, so this must be a genuine .docx package."""
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("[Content_Types].xml", "<Types/>")
+        z.writestr("word/document.xml", "<w:document/>")
+    return buf.getvalue()
+
+
 def upload(client, headers, *, content=PDF, content_type="application/pdf", name="contract.pdf",
            title="Main Contract", category="contract", project_id=None, description=None):
     data = {"title": title, "category": category}
@@ -45,7 +56,7 @@ def test_inline_preview_only_for_safe_types(client, auth_a):
     assert r.headers["content-disposition"].startswith("inline")
 
     docx_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    docx = upload(client, auth_a, content=b"PK\x03\x04" + b"\x00" * 30, content_type=docx_type, name="spec.docx").json()
+    docx = upload(client, auth_a, content=minimal_docx(), content_type=docx_type, name="spec.docx").json()
     r = client.get(f"/api/v1/documents/{docx['id']}/download?inline=true", headers=auth_a)
     assert r.headers["content-disposition"].startswith("attachment")
 
@@ -120,3 +131,25 @@ def test_delete_removes_record_and_file(client, auth_a):
     assert client.delete(f"/api/v1/documents/{doc['id']}", headers=auth_a).status_code == 204
     assert client.get(f"/api/v1/documents/{doc['id']}", headers=auth_a).status_code == 404
     assert stored_files() == []
+
+
+def test_content_must_match_the_declared_type(client, auth_a):
+    """BUILD-124: the Content-Type header is the client's claim; the bytes are checked."""
+    exe = b"MZ\x90\x00" + b"\x00" * 64
+    html = b"<html><script>alert(1)</script></html>"
+    docx_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    rejected = [
+        (exe, "application/pdf", "invoice.pdf"),
+        (html, "application/pdf", "invoice.pdf"),
+        (exe, "image/png", "photo.png"),
+        (b"PK\x03\x04" + b"\x00" * 30, docx_type, "fake.docx"),  # zip header, but not a Word package
+        (b"a,b\x00\x01\x02", "text/csv", "data.csv"),  # binary posing as text
+    ]
+    for content, content_type, name in rejected:
+        res = upload(client, auth_a, content=content, content_type=content_type, name=name)
+        assert res.status_code == 415, (name, res.status_code)
+    assert stored_files() == []
+    # Real files of those types still go through, including a non-UTF-8 (cp1252) CSV.
+    assert upload(client, auth_a, content="name,amount\nCafé,10\n".encode("cp1252"),
+                  content_type="text/csv", name="costs.csv").status_code == 201
+    assert upload(client, auth_a, content=minimal_docx(), content_type=docx_type, name="spec.docx").status_code == 201

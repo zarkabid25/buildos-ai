@@ -30,6 +30,7 @@ from app.services.material_service import get_material
 from app.services.project_service import get_project
 from app.services.supplier_service import get_supplier
 from app.services.warehouse_service import get_warehouse
+from app.services import audit_service
 
 # Mirrors CAN_APPROVE in app/api/v1/procurement.py -- whoever can approve a
 # material request or PO there is who gets notified here when one needs review.
@@ -100,12 +101,23 @@ def create_material_request(
 
 
 def update_material_request_status(
-    db: Session, company_id: uuid.UUID, request_id: uuid.UUID, new_status: MaterialRequestStatus
+    db: Session,
+    company_id: uuid.UUID,
+    actor_id: uuid.UUID,
+    request_id: uuid.UUID,
+    new_status: MaterialRequestStatus,
 ) -> MaterialRequest:
+    if new_status not in (MaterialRequestStatus.APPROVED, MaterialRequestStatus.REJECTED):
+        # "converted" is set by raising a PO from the request, never by hand.
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A request can only be approved or rejected here")
     req = get_material_request(db, company_id, request_id)
     if req.status != MaterialRequestStatus.PENDING:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only a pending request can change status")
     req.status = new_status
+    audit_service.record(
+        db, company_id, actor_id, f"material_request.{new_status.value}", "material_request", req.id,
+        f"Material request {new_status.value} ({len(req.items)} item(s))",
+    )
     db.commit()
     db.refresh(req)
     return req
@@ -149,6 +161,11 @@ def create_purchase_order(
         get_project(db, company_id, payload.project_id)
     for item in payload.items:
         get_material(db, company_id, item.material_id)
+    request = None
+    if payload.material_request_id:
+        request = get_material_request(db, company_id, payload.material_request_id)
+        if request.status not in (MaterialRequestStatus.PENDING, MaterialRequestStatus.APPROVED):
+            raise HTTPException(status.HTTP_409_CONFLICT, f"This material request is already {request.status.value}")
 
     po = PurchaseOrder(
         company_id=company_id,
@@ -173,10 +190,9 @@ def create_purchase_order(
             )
         )
 
-    if payload.material_request_id:
-        req = get_material_request(db, company_id, payload.material_request_id)
-        if req.status == MaterialRequestStatus.PENDING:
-            req.status = MaterialRequestStatus.CONVERTED
+    # Approved (the normal path) or still pending, the request is now done.
+    if request:
+        request.status = MaterialRequestStatus.CONVERTED
 
     notification_service.notify_users_with_roles(
         db, company_id, APPROVER_ROLES, NotificationType.PURCHASE_ORDER_PENDING,
@@ -184,6 +200,12 @@ def create_purchase_order(
         body=f"Total: {sum(i.quantity * i.rate for i in po.items):,.0f}",
         link="/procurement",
         exclude_user_id=user_id,
+    )
+    total = sum((item.quantity * item.rate for item in payload.items), Decimal("0")).quantize(Decimal("0.01"))
+    audit_service.record(
+        db, company_id, user_id, "purchase_order.created", "purchase_order", po.id,
+        f"{po.po_number} created for {total:,.2f}",
+        {"po_number": po.po_number, "supplier_id": str(payload.supplier_id), "total": str(total)},
     )
 
     db.commit()
@@ -199,6 +221,11 @@ def approve_purchase_order(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only a pending-approval PO can be approved")
     po.status = PurchaseOrderStatus.APPROVED
     po.approved_by_id = user_id
+    audit_service.record(
+        db, company_id, user_id, "purchase_order.approved", "purchase_order", po.id,
+        f"{po.po_number} approved ({po.total_amount:,.2f})",
+        {"po_number": po.po_number, "total": str(po.total_amount.quantize(Decimal("0.01")))},
+    )
     db.commit()
     db.refresh(po)
     return po
@@ -276,6 +303,14 @@ def create_goods_receipt(
     else:
         po.status = PurchaseOrderStatus.PARTIALLY_RECEIVED
 
+    audit_service.record(
+        db, company_id, user_id, "goods_receipt.created", "purchase_order", po.id,
+        f"Goods received against {po.po_number} ({po.status.value.replace('_', ' ')})",
+        {"receipt_id": str(receipt.id), "lines": [
+            {"purchase_order_item_id": str(line.purchase_order_item_id), "quantity": str(line.quantity_received)}
+            for line in payload.items
+        ]},
+    )
     db.commit()
     db.refresh(receipt)
     return receipt

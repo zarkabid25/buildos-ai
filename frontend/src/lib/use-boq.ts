@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import type { BoqAiGenerateResponse, BoqItem, BoqSummary } from "@/lib/boq-types";
+import type { BoqAiGenerateResponse, BoqItem, BoqSummary, BoqVsActual } from "@/lib/boq-types";
 
 export interface BoqItemInput {
   item_code: string;
@@ -10,6 +10,7 @@ export interface BoqItemInput {
   unit: string;
   quantity: string;
   rate: string;
+  material_id?: string | null;
 }
 
 export function useBoqItems(projectId: string) {
@@ -30,10 +31,20 @@ export function useBoqSummary(projectId: string) {
   });
 }
 
+export function useBoqVsActual(projectId: string) {
+  const { accessToken } = useAuth();
+  return useQuery({
+    queryKey: ["projects", projectId, "boq", "vs-actual"],
+    queryFn: () => api.get<BoqVsActual>(`/projects/${projectId}/boq/vs-actual`, accessToken ?? undefined),
+    enabled: !!accessToken && !!projectId,
+  });
+}
+
 export function useCreateBoqItem(projectId: string) {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { inlineError: true },
     mutationFn: (input: BoqItemInput) =>
       api.post<BoqItem>(`/projects/${projectId}/boq`, input, accessToken ?? undefined),
     onSuccess: () => {

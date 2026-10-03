@@ -1,0 +1,30 @@
+# Production image (BUILD-135). The plain Dockerfile is the dev image (--reload,
+# source mounted by docker-compose.yml); this one bakes the code in.
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# psycopg2-binary bundles libpq, so no compiler or -dev packages are needed.
+COPY pyproject.toml ./
+COPY app ./app
+RUN pip install --no-cache-dir .
+
+COPY alembic.ini ./
+COPY alembic ./alembic
+
+RUN useradd --create-home --uid 10001 buildos \
+    && mkdir -p /app/storage_data \
+    && chown buildos /app/storage_data
+USER buildos
+
+EXPOSE 8000
+
+# Migrations run on start, which is safe with a single backend container.
+# One worker on purpose: login rate limits are kept in process memory
+# (app/core/rate_limit.py), so extra workers would each count separately.
+# --proxy-headers trusts X-Forwarded-For only from FORWARDED_ALLOW_IPS
+# (uvicorn's default is 127.0.0.1); set it to the reverse proxy's address.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers"]

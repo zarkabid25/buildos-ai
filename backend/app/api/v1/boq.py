@@ -14,6 +14,7 @@ from app.schemas.boq import (
     BoqItemRead,
     BoqItemUpdate,
     BoqSummary,
+    BoqVsActual,
 )
 from app.services import boq_service
 
@@ -38,6 +39,15 @@ def boq_summary(
     db: Session = Depends(get_db),
 ) -> BoqSummary:
     return boq_service.get_summary(db, current_user.company_id, project_id)
+
+
+@router.get("/vs-actual", response_model=BoqVsActual)
+def boq_vs_actual(
+    project_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BoqVsActual:
+    return boq_service.get_boq_vs_actual(db, current_user.company_id, project_id)
 
 
 @router.post("", response_model=BoqItemRead, status_code=201)
@@ -68,7 +78,7 @@ def delete_item(
     current_user: User = Depends(require_roles(*CAN_WRITE)),
     db: Session = Depends(get_db),
 ) -> None:
-    boq_service.delete_item(db, current_user.company_id, project_id, item_id)
+    boq_service.delete_item(db, current_user.company_id, current_user.id, project_id, item_id)
 
 
 @router.post("/ai-generate", response_model=BoqAiGenerateResponse)

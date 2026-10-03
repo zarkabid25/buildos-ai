@@ -11,6 +11,8 @@ class AiStatus(BaseModel):
     configured: bool
     provider: str
     model: str
+    use_fallbacks: bool
+    max_tool_iterations: int
 
 
 class Insight(BaseModel):

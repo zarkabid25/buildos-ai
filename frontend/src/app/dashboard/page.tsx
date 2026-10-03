@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { AppShell } from "@/components/app-shell";
 import { InsightsList, RulesNote } from "@/components/insights-list";
+import { ErrorState, Skeleton } from "@/components/ui/states";
 import { useAuth } from "@/lib/auth-context";
 import { useInsights } from "@/lib/use-ai";
 import { useProjectSummary } from "@/lib/use-projects";
@@ -14,8 +15,10 @@ import { useEffect } from "react";
 export default function DashboardPage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
-  const { data: summary, isLoading: summaryLoading } = useProjectSummary();
-  const { data: insights } = useInsights();
+  const summaryQuery = useProjectSummary();
+  const { data: summary, isLoading: summaryLoading } = summaryQuery;
+  const insightsQuery = useInsights();
+  const insights = insightsQuery.data;
 
   useEffect(() => {
     if (!isLoading && !user) router.replace("/login");
@@ -44,12 +47,13 @@ export default function DashboardPage() {
           {stats.map((stat) => (
             <div key={stat.label} className="rounded-card border border-border bg-surface p-4">
               <div className="text-2xl font-semibold text-ink">
-                {summaryLoading ? "…" : stat.value}
+                {summaryLoading ? <Skeleton className="h-8 w-16" /> : stat.value}
               </div>
               <div className="text-sm text-muted">{stat.label}</div>
             </div>
           ))}
         </div>
+        {summaryQuery.isError && <ErrorState error={summaryQuery.error} onRetry={() => summaryQuery.refetch()} />}
 
         <div className="rounded-card border border-border bg-surface p-5">
           <div className="mb-2 flex items-center justify-between">
@@ -66,8 +70,13 @@ export default function DashboardPage() {
                 <InsightsList insights={insights.insights} limit={3} />
               </div>
             </>
+          ) : insightsQuery.isError ? (
+            <ErrorState error={insightsQuery.error} onRetry={() => insightsQuery.refetch()} />
           ) : (
-            <p className="text-sm text-muted">Checking your projects...</p>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
           )}
           <Link href="/ai" className="mt-3 inline-block text-xs text-primary hover:underline">
             Ask BuildOS AI a question

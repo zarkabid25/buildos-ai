@@ -49,6 +49,7 @@ export function useUploadDocument() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { inlineError: true },
     // Multipart, so this bypasses api.ts (which always sends JSON).
     mutationFn: async (input: {
       file: File;
@@ -83,6 +84,7 @@ export function useDeleteDocument() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { inlineError: true },
     mutationFn: (id: string) => api.delete<void>(`/documents/${id}`, accessToken ?? undefined),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["documents"] }),
   });

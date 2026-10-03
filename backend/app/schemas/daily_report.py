@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class DailyReportCreate(BaseModel):
     report_date: date
-    weather: str | None = None
+    weather: str | None = Field(default=None, max_length=100)
     workers_count: int = Field(default=0, ge=0)
     work_completed: str | None = None
     materials_consumed: str | None = None

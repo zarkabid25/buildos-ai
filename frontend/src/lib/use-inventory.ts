@@ -88,6 +88,7 @@ export function useStockIn() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { inlineError: true },
     mutationFn: (input: {
       material_id: string;
       warehouse_id: string;
@@ -104,6 +105,7 @@ export function useStockOut() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { inlineError: true },
     mutationFn: (input: {
       material_id: string;
       warehouse_id: string;

@@ -15,6 +15,7 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   isLoading: boolean;
   setSession: (auth: AuthResponse) => void;
+  updateUser: (user: User) => void;
   logout: () => void;
 }
 
@@ -80,6 +81,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     persist(next);
   }
 
+  function updateUser(user: User) {
+    setState((prev) => {
+      const next = { ...prev, user };
+      persist(next);
+      return next;
+    });
+  }
+
   function logout() {
     const next: AuthState = { user: null, accessToken: null, refreshToken: null };
     setState(next);
@@ -87,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ ...state, isLoading, setSession, logout }}>
+    <AuthContext.Provider value={{ ...state, isLoading, setSession, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   );
