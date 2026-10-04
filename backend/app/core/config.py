@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_JWT_SECRET = "change-me-in-production"
@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 7
+    # bcrypt work factor. 12 is the production standard; the test suite lowers it to
+    # the minimum (4) because it hashes hundreds of passwords and only checks behaviour.
+    bcrypt_rounds: int = Field(default=12, ge=4, le=16)
 
     cors_origins: list[str] = ["http://localhost:3000"]
 
@@ -52,6 +55,8 @@ class Settings(BaseSettings):
             problems.append("JWT_SECRET_KEY must be a random value of at least 32 characters")
         if "buildos:buildos@" in self.database_url:
             problems.append("DATABASE_URL still uses the example password")
+        if self.bcrypt_rounds < 12:
+            problems.append("BCRYPT_ROUNDS must be at least 12")
         if not self.cors_origins or any("localhost" in origin for origin in self.cors_origins):
             problems.append("CORS_ORIGINS must list the real frontend address, not localhost")
         if problems:

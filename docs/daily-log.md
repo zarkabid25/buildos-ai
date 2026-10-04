@@ -755,3 +755,9 @@ Until now the only way to add a second user was inserting them directly in the d
 - Migration **0021** (`invitations`, reusing the existing `user_role` type). Applied to the dev DB (backed up; drift check clean).
 - Tests: `tests/test_invitations_http.py` (8): full invite → info → accept → login (any case) → link dead; the token is shown once and stored hashed; bad, expired (410) and revoked links; re-invite replaces; existing account refused; role rules; per-company; input validation.
 - **BUILD-105 stays partial:** what each role is *allowed to do* is still fixed in code (each router's role list). Making that editable is a permission-system redesign, not a settings screen.
+
+### Faster test suite
+Measured first: per test, about **1 s** went on dropping and re-creating all 44 tables, and **~0.45 s per bcrypt hash or check** at cost 12 (most tests register two companies and log in). Fixes:
+- The schema is built **once per run**, and each test starts by deleting every table's rows in reverse foreign-key order (works with FK enforcement on, and on Postgres).
+- New setting **`BCRYPT_ROUNDS`** (default 12). The suite uses 4: same algorithm and hash format, far fewer rounds. The production config guard refuses anything below 12, with a test for that.
+- Result: **305 passed in 72 s, down from ~16 minutes**, with no tests changed apart from the config test that now passes `bcrypt_rounds=12` explicitly.

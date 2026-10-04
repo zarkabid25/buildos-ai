@@ -16,6 +16,9 @@ os.environ["LLM_API_KEY"] = ""
 os.environ["LLM_MODEL"] = "claude-opus-5"
 os.environ["LLM_USE_FALLBACKS"] = "true"
 os.environ["LLM_MAX_TOOL_ITERATIONS"] = "8"
+# Minimum bcrypt cost: every test registers users, and at the production cost of 12
+# each hash takes ~0.5s here. Same algorithm and hash format, just fewer rounds.
+os.environ["BCRYPT_ROUNDS"] = "4"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -37,12 +40,24 @@ def _enforce_foreign_keys(dbapi_connection, _record):
 from app.main import app  # noqa: E402
 
 
+# Build the schema once per run (drop first, in case a previous run was interrupted),
+# then empty every table between tests: deleting rows takes milliseconds, whereas
+# dropping and re-creating 40+ tables took about a second per test.
+Base.metadata.drop_all(engine)
+Base.metadata.create_all(engine)
+
+
+def _empty_all_tables() -> None:
+    with engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):  # children before parents (FKs on)
+            conn.execute(table.delete())
+
+
 @pytest.fixture(autouse=True)
 def fresh_db():
     import shutil
 
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
+    _empty_all_tables()
     # Uploaded files must not leak between tests either, or "nothing was stored"
     # assertions would depend on test order.
     shutil.rmtree(os.environ["STORAGE_DIR"], ignore_errors=True)
