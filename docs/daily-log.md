@@ -761,3 +761,11 @@ Measured first: per test, about **1 s** went on dropping and re-creating all 44 
 - The schema is built **once per run**, and each test starts by deleting every table's rows in reverse foreign-key order (works with FK enforcement on, and on Postgres).
 - New setting **`BCRYPT_ROUNDS`** (default 12). The suite uses 4: same algorithm and hash format, far fewer rounds. The production config guard refuses anything below 12, with a test for that.
 - Result: **305 passed in 72 s, down from ~16 minutes**, with no tests changed apart from the config test that now passes `bcrypt_rounds=12` explicitly.
+
+### Browser tests for the critical flows (BUILD-134)
+- **Playwright** (`@playwright/test`, a dev-only dependency). Locally it drives the **installed Chrome**, so no browser download; CI installs Chromium. `npm run test:e2e` in `frontend/`.
+- **Fully isolated from the dev setup:** Playwright starts its own backend (`backend/scripts/e2e_server.py`: a fresh throwaway SQLite DB every run, port 8020) and its own **production build** of the frontend into **`.next-e2e`** (port 3020). That needed one config line, `distDir: process.env.NEXT_DIST_DIR || ".next"`, so a running `next dev` and the tests never share a build folder. Next.js adds the `.next-e2e` types path to `tsconfig.json` itself on build.
+- **4 tests:** sign-up lands on the dashboard; wrong password refused, any-case email signs in, log out, and protected pages then bounce to login; **an admin invites someone, the invitee opens the link in a separate browser session, sees the company and role, gets the "at least 8 characters" error, then joins and is signed in; the link is then dead; the admin sees them in the team**; and **RFQ → exact totals with lowest flagged → award via confirm dialog → PO pending approval → approve via dialog (exact amount) → partial cheque payment → owed figures update → overpayment warned and refused**.
+- The first run caught a real accessibility issue: Settings had **two fields both labelled "Email"** (company email and invite email), ambiguous for screen readers as well as tests. The invite fields are now "Invitee email / name / role".
+- **CI:** a new `e2e` job (after backend and frontend pass) runs them on GitHub and uploads traces if anything fails.
+- Result: **4 passed in 2.3 min** (including the production build).

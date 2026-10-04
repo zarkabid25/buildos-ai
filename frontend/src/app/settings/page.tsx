@@ -474,10 +474,10 @@ function InvitationsSection({ currentRole }: { currentRole: UserRole }) {
         They choose their own password. Inviting the same email again replaces the old link.
       </p>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
-        <Input aria-label="Email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        <Input aria-label="Name (optional)" placeholder="Name (optional)" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+        <Input aria-label="Invitee email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        <Input aria-label="Invitee name (optional)" placeholder="Name (optional)" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
         <select
-          aria-label="Role"
+          aria-label="Invitee role"
           className="h-9 rounded-md border border-border bg-surface px-2 text-sm"
           value={form.role}
           onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}

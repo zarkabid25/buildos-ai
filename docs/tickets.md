@@ -184,7 +184,7 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [x] BUILD-131 Procurement tests (test_procurement_http.py; found and fixed 2 bugs in material request status handling)
 - [x] BUILD-132 Project tests (test_projects_finance_http.py; found and fixed 3 bugs: negative budget on update, end before start, deleting a project with records)
 - [~] BUILD-133 AI tests (tool loop, scoping, approval gate, request shape: done; real model behaviour: not testable without a key)
-- [ ] BUILD-134 Frontend critical-flow tests (needs a browser test runner, e.g. Playwright, which would be a new dev dependency; waiting on a decision)
+- [x] BUILD-134 Frontend critical-flow tests (Playwright: sign-up, sign-in/out, invite → join, RFQ → award → PO approval → payment; own backend + build; in CI)
 
 ## Epic 26 — Deployment
 - [~] BUILD-135 Production Docker setup (Dockerfile.prod for both apps + deploy/docker-compose.prod.yml; production `next build` and migrations verified, but no Docker on this machine, so the images themselves have not been built)
