@@ -769,3 +769,7 @@ Measured first: per test, about **1 s** went on dropping and re-creating all 44 
 - The first run caught a real accessibility issue: Settings had **two fields both labelled "Email"** (company email and invite email), ambiguous for screen readers as well as tests. The invite fields are now "Invitee email / name / role".
 - **CI:** a new `e2e` job (after backend and frontend pass) runs them on GitHub and uploads traces if anything fails.
 - Result: **4 passed in 2.3 min** (including the production build).
+
+### Security: Next.js 14.2.5 → 14.2.35
+`npm audit` (production dependencies) flagged the pinned **Next.js 14.2.5** with many published advisories. Upgraded to **14.2.35**, the last 14.2 patch release: drop-in, no API changes, fixes most of them, including the middleware authorization bypass (this app has no middleware, so it wasn't exposed). Versions stay pinned exactly, and the lockfile was re-synced so CI's `npm ci` accepts it. Type-check clean, and all 4 browser tests pass against a production build on 14.2.35.
+**Still open:** a set of advisories is fixed only in **Next.js 15.5+**, including two critical ones (remote code execution in the image optimizer with AVIF files, and on Windows-hosted servers). That's a major upgrade (React 19, changed caching and request APIs). The app is all client components, so it should be manageable, but it needs its own planned and tested change. Recommended as the next infrastructure task.
