@@ -84,3 +84,46 @@ export function useAuditLog(enabled: boolean) {
     enabled: !!accessToken && enabled,
   });
 }
+
+export interface Invitation {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: UserRole;
+  invited_by_name: string | null;
+  created_at: string;
+  expires_at: string;
+  expired: boolean;
+}
+
+export function useInvitations(enabled: boolean) {
+  const { accessToken } = useAuth();
+  return useQuery({
+    queryKey: ["invitations"],
+    queryFn: () => api.get<Invitation[]>("/users/invitations", accessToken ?? undefined),
+    enabled: !!accessToken && enabled,
+  });
+}
+
+export function useCreateInvitation() {
+  const { accessToken } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { inlineError: true },
+    mutationFn: (input: { email: string; role: UserRole; full_name?: string }) =>
+      api.post<Invitation & { token: string }>("/users/invitations", input, accessToken ?? undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["invitations"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-log"] });
+    },
+  });
+}
+
+export function useRevokeInvitation() {
+  const { accessToken } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/users/invitations/${id}`, accessToken ?? undefined),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["invitations"] }),
+  });
+}

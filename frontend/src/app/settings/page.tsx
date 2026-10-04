@@ -14,11 +14,15 @@ import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { UserRole } from "@/lib/auth-types";
 import { useAiStatus } from "@/lib/use-ai";
+import { inviteSchema } from "@/lib/schemas";
 import { ROLE_LABELS, type Company } from "@/lib/settings-types";
 import {
   useAuditLog,
   useChangePassword,
   useCompany,
+  useCreateInvitation,
+  useInvitations,
+  useRevokeInvitation,
   useUpdateCompany,
   useUpdateMe,
   useUpdateUser,
@@ -54,6 +58,7 @@ export default function SettingsPage() {
         <CompanySection canEdit={isAdmin} />
         <AiSection />
         {isAdmin && <TeamSection currentUserId={user.id} currentRole={user.role} />}
+        {isAdmin && <InvitationsSection currentRole={user.role} />}
         {isAdmin && <ActivitySection />}
       </div>
     </AppShell>
@@ -316,8 +321,8 @@ function TeamSection({ currentUserId, currentRole }: { currentUserId: string; cu
       <h2 className="text-base font-semibold text-ink">Team and roles</h2>
       <p className="text-xs text-muted">
         A role decides what each person can do (for example, only admins and project managers approve
-        purchase orders). You can&apos;t change your own role or deactivate yourself. There&apos;s no
-        invite flow yet, so new users are still added by an administrator outside the app.
+        purchase orders). You can&apos;t change your own role or deactivate yourself. Add people with an
+        invitation below.
       </p>
       {error && <p className="text-sm text-danger">{error}</p>}
       {isLoading && <p className="text-sm text-muted">Loading users...</p>}
@@ -416,6 +421,119 @@ function ActivitySection() {
                 <span className="text-ink">{e.summary}</span>
                 <span className="text-xs text-muted">
                   {e.actor_name ?? "Unknown user"} · {new Date(e.created_at).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </QueryView>
+    </Card>
+  );
+}
+
+function InvitationsSection({ currentRole }: { currentRole: UserRole }) {
+  const invitations = useInvitations(true);
+  const create = useCreateInvitation();
+  const revoke = useRevokeInvitation();
+  const { confirm, toast } = useFeedback();
+  const [form, setForm] = useState({ email: "", full_name: "", role: "site_engineer" as UserRole });
+  const [error, setError] = useState<string | null>(null);
+  const [link, setLink] = useState<{ email: string; url: string } | null>(null);
+  const roles = (Object.keys(ROLE_LABELS) as UserRole[]).filter((r) => r !== "super_admin" || currentRole === "super_admin");
+
+  async function handleInvite() {
+    setError(null);
+    const parsed = inviteSchema.safeParse({ ...form, full_name: form.full_name || undefined });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "Check the form");
+      return;
+    }
+    try {
+      const created = await create.mutateAsync(parsed.data);
+      setLink({ email: created.email, url: `${window.location.origin}/accept-invite?token=${created.token}` });
+      setForm({ email: "", full_name: "", role: form.role });
+    } catch (err) {
+      setError(errorText(err, "Could not create the invitation."));
+    }
+  }
+
+  async function copy(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("Invite link copied.", "success");
+    } catch {
+      toast("Couldn't copy automatically; select the link and copy it.", "info");
+    }
+  }
+
+  return (
+    <Card className="space-y-3">
+      <h2 className="text-base font-semibold text-ink">Invite people</h2>
+      <p className="text-xs text-muted">
+        Creates a one-time link, valid for 7 days, that you send to the person yourself (e.g. by email or WhatsApp).
+        They choose their own password. Inviting the same email again replaces the old link.
+      </p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+        <Input aria-label="Email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        <Input aria-label="Name (optional)" placeholder="Name (optional)" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+        <select
+          aria-label="Role"
+          className="h-9 rounded-md border border-border bg-surface px-2 text-sm"
+          value={form.role}
+          onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
+        >
+          {roles.map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABELS[r]}
+            </option>
+          ))}
+        </select>
+        <Button onClick={handleInvite} disabled={create.isPending || !form.email.trim()}>
+          {create.isPending ? "Creating..." : "Create invite link"}
+        </Button>
+      </div>
+      {error && <p className="text-sm text-danger">{error}</p>}
+      {link && (
+        <div className="space-y-1 rounded-md border border-success/40 bg-green-50/60 p-3">
+          <p className="text-sm text-ink">
+            Send this link to {link.email}. It&apos;s shown only once; if it&apos;s lost, invite them again.
+          </p>
+          <div className="flex gap-2">
+            <Input aria-label="Invite link" readOnly value={link.url} onFocus={(e) => e.target.select()} />
+            <Button variant="secondary" onClick={() => copy(link.url)}>
+              Copy
+            </Button>
+          </div>
+        </div>
+      )}
+      <QueryView
+        query={invitations}
+        isEmpty={(list) => list.length === 0}
+        empty={<p className="text-sm text-muted">No pending invitations.</p>}
+      >
+        {(list) => (
+          <ul className="divide-y divide-border text-sm">
+            {list.map((inv) => (
+              <li key={inv.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span>
+                  <span className="text-ink">{inv.full_name ? `${inv.full_name} · ` : ""}{inv.email}</span>
+                  <span className="ml-2 text-xs text-muted">{ROLE_LABELS[inv.role]}</span>
+                </span>
+                <span className="flex items-center gap-3 text-xs">
+                  {inv.expired ? (
+                    <span className="text-danger">Expired</span>
+                  ) : (
+                    <span className="text-muted">Expires {new Date(inv.expires_at).toLocaleDateString()}</span>
+                  )}
+                  <button
+                    className="text-muted hover:text-danger"
+                    onClick={async () => {
+                      const ok = await confirm({ title: `Revoke the invitation for ${inv.email}?`, body: "The link stops working.", confirmLabel: "Revoke", danger: true });
+                      if (ok) revoke.mutate(inv.id);
+                    }}
+                  >
+                    {inv.expired ? "Remove" : "Revoke"}
+                  </button>
                 </span>
               </li>
             ))}

@@ -7,7 +7,7 @@ from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.auth import AuthResponse, LoginRequest, RefreshRequest, RegisterRequest, TokenPair
-from app.schemas.user import PasswordChange, UserRead, UserSelfUpdate
+from app.schemas.user import AcceptInvitation, InvitationInfo, PasswordChange, UserRead, UserSelfUpdate
 from app.services import auth_service, user_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -26,6 +26,28 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     limiter.check(key, settings.register_max_per_ip, settings.register_window_seconds, TOO_MANY)
     limiter.hit(key)
     user, tokens = auth_service.register(db, payload)
+    return AuthResponse(**tokens.model_dump(), user=UserRead.model_validate(user))
+
+
+@router.get("/invitations/{token}", response_model=InvitationInfo)
+def invitation_info(token: str, request: Request, db: Session = Depends(get_db)) -> InvitationInfo:
+    # Public: the person opening the link isn't signed in yet. Tokens are 256-bit random,
+    # but lookups are still capped per address like registration.
+    settings = get_settings()
+    key = f"invite:{_client_ip(request)}"
+    limiter.check(key, settings.register_max_per_ip * 5, settings.register_window_seconds, TOO_MANY)
+    limiter.hit(key)
+    return user_service.get_invitation_info(db, token)
+
+
+@router.post("/accept-invite", response_model=AuthResponse, status_code=201)
+def accept_invite(payload: AcceptInvitation, request: Request, db: Session = Depends(get_db)) -> AuthResponse:
+    settings = get_settings()
+    key = f"register:{_client_ip(request)}"
+    limiter.check(key, settings.register_max_per_ip, settings.register_window_seconds, TOO_MANY)
+    limiter.hit(key)
+    user = user_service.accept_invitation(db, payload)
+    tokens = auth_service.issue_tokens(user)
     return AuthResponse(**tokens.model_dump(), user=UserRead.model_validate(user))
 
 

@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.security import (
@@ -17,7 +18,7 @@ from app.schemas.auth import LoginRequest, RegisterRequest, TokenPair
 
 
 def register(db: Session, payload: RegisterRequest) -> tuple[User, TokenPair]:
-    if db.query(User).filter(User.email == payload.email).first():
+    if db.query(User).filter(func.lower(User.email) == payload.email.lower()).first():
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
     if db.query(Company).filter(Company.code == payload.company_code).first():
         raise HTTPException(status.HTTP_409_CONFLICT, "Company code already in use")
@@ -37,17 +38,18 @@ def register(db: Session, payload: RegisterRequest) -> tuple[User, TokenPair]:
     db.commit()
     db.refresh(user)
 
-    return user, _issue_tokens(user)
+    return user, issue_tokens(user)
 
 
 def login(db: Session, payload: LoginRequest) -> tuple[User, TokenPair]:
-    user = db.query(User).filter(User.email == payload.email).first()
+    # Emails are matched case-insensitively: "John@Site.com" and "john@site.com" are one person.
+    user = db.query(User).filter(func.lower(User.email) == payload.email.lower()).first()
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
     if not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "User account is disabled")
 
-    return user, _issue_tokens(user)
+    return user, issue_tokens(user)
 
 
 def refresh(db: Session, refresh_token: str) -> TokenPair:
@@ -64,10 +66,10 @@ def refresh(db: Session, refresh_token: str) -> TokenPair:
     if not user or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
 
-    return _issue_tokens(user)
+    return issue_tokens(user)
 
 
-def _issue_tokens(user: User) -> TokenPair:
+def issue_tokens(user: User) -> TokenPair:
     return TokenPair(
         access_token=create_access_token(str(user.id)),
         refresh_token=create_refresh_token(str(user.id)),

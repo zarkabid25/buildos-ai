@@ -147,7 +147,7 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 ## Epic 21 — Settings
 - [x] BUILD-103 Company settings (/settings; admins edit name/contact/currency/unit system, validated; others read-only)
 - [x] BUILD-104 User settings (edit own name, change password with current-password check)
-- [~] BUILD-105 Role permissions (admins list users, change roles, deactivate; guards against self-lockout and non-super-admins granting super admin. What each role may do is still hardcoded per router, not editable; no invite flow)
+- [~] BUILD-105 Role permissions (admins invite people by one-time link with a role, change roles, deactivate; self-lockout and super-admin guards. What each role may do is still fixed in code, not editable)
 - [~] BUILD-106 Currency/unit settings (company currency now labels every amount in the UI, no conversion; unit system is stored but nothing converts units)
 - [~] BUILD-107 AI settings (read-only section on /settings: connected or not, provider, model, tool-step limit; the key stays a server env var and is never shown. Editing model/key in the UI would mean storing an encrypted secret per company, which needs a decision)
 

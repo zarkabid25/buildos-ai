@@ -739,3 +739,19 @@ Next on the AI list that doesn't need an API key: making the *contents* of uploa
 - Browser (isolated copy, :3001/:8001): "retention money" finds page 3 of a 4-page contract with both words highlighted, and clicking it opens the PDF at `#page=3`; a Word spec is found by "concrete M25"; no matches shows a clear message; the Searchable column reads correctly for PDF, Word and a scan; no console errors.
 - Dev DB migrated to 0020 (backed up first); schema matches the models.
 - Full suite: **296 passed**.
+
+---
+
+## Day 27 — 2026-10-11 — Non-AI items: user invitations (BUILD-105)
+
+Zark asked to carry on with the non-AI items: invitations, a faster test suite, then Playwright browser tests.
+
+### Inviting people
+Until now the only way to add a second user was inserting them directly in the database. Now:
+- An admin creates an invitation (email, optional name, role) in **Settings → Invite people**. The app shows a **one-time link** (valid 7 days) to send yourself, since there's no email service configured. Only a **SHA-256 hash** of the token is stored, so the link is shown once and a database leak can't be turned into invites. Inviting the same email again replaces the old link. Pending invites can be revoked, and expired ones are flagged.
+- The person opens **`/accept-invite?token=…`** (a public page). It shows which company and role they're joining, they choose a name and password (validated in the browser with zod and on the server), and they're signed straight in. The link can't be reused. If someone is already signed in on that browser, the page warns that accepting will switch accounts.
+- Rules: only admins invite; only a super admin can invite a super admin; an email that already has an account anywhere is refused (emails are globally unique). Invitations are per company (another company can't see or revoke them). `user.invited`, `user.invitation_revoked` and `user.joined` go in the audit log. The two public endpoints are rate-limited per address, and the authorization sweep test's public list was updated to include exactly these two.
+- **Login is now case-insensitive on email** (and registration's duplicate check too). Invited emails are stored lowercase, so `New@Example.com` would otherwise have failed to sign in.
+- Migration **0021** (`invitations`, reusing the existing `user_role` type). Applied to the dev DB (backed up; drift check clean).
+- Tests: `tests/test_invitations_http.py` (8): full invite → info → accept → login (any case) → link dead; the token is shown once and stored hashed; bad, expired (410) and revoked links; re-invite replaces; existing account refused; role rules; per-company; input validation.
+- **BUILD-105 stays partial:** what each role is *allowed to do* is still fixed in code (each router's role list). Making that editable is a permission-system redesign, not a settings screen.
