@@ -6,3 +6,39 @@ body {
   background-color: #f7f8fa;
   color: #111827;
 }
+
+/* Platform admin portal only (docs/design-system-admin-portal.md). Scoped so it
+   never bleeds into the existing ERP, which keeps its own tokens above. */
+.buildos-admin {
+  color-scheme: light;
+  --bo-canvas: #F8F9FB;
+  --bo-surface: #FFFFFF;
+  --bo-surface-hover: #F7F7F8;
+  --bo-nav-active: #F3F3F4;
+  --bo-kpi-surface: #F1F2FF;
+  --bo-border: #E6E7EB;
+  --bo-divider: #EFF0F2;
+  --bo-text: #17191D;
+  --bo-text-secondary: #686B73;
+  --bo-text-muted: #777B85;
+  --bo-primary: #3D50FF;
+  --bo-primary-hover: #3040D9;
+  --bo-primary-soft: #EEF0FF;
+  --bo-on-primary: #FFFFFF;
+  --bo-chart-blue: #4055FF;
+  --bo-chart-cyan: #17B5EF;
+  --bo-chart-orange: #FF663D;
+  --bo-success: #167448;
+  --bo-success-bg: #EAF7EF;
+  --bo-danger: #B83232;
+  --bo-danger-bg: #FDEEEE;
+  --bo-focus: #3045DD;
+  --bo-shadow-card: 0 2px 5px rgb(16 24 40 / 5%);
+  --bo-shadow-raised: 0 5px 16px rgb(16 24 40 / 10%);
+  background-color: var(--bo-canvas);
+  color: var(--bo-text);
+}
+
+.buildos-admin .bo-tabular {
+  font-variant-numeric: tabular-nums;
+}

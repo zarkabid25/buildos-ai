@@ -37,7 +37,7 @@ export default function PlatformLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-sidebar px-4">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm">
         <h1 className="mb-1 text-xl font-semibold text-ink">BuildOS Platform</h1>
         <p className="mb-6 text-sm text-muted">Sign in as a platform administrator.</p>

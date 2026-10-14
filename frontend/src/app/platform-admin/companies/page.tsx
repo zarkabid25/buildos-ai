@@ -3,16 +3,26 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Search } from "lucide-react";
 
 import { PlatformShell } from "@/components/platform-shell";
 import { useFeedback } from "@/components/feedback";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/states";
+import { StatusBadge } from "@/components/platform/status-badge";
+import { EmptyState, ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/platform-api";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
 import { usePlatformCompanies, useSetCompanySuspended } from "@/lib/use-platform";
+import { cn } from "@/lib/utils";
+
+function RowSkeleton() {
+  return (
+    <tr className="border-b border-[var(--bo-divider)] last:border-0">
+      <td className="px-4 py-4" colSpan={6}>
+        <div className="h-4 w-full animate-pulse rounded bg-[var(--bo-nav-active)]" />
+      </td>
+    </tr>
+  );
+}
 
 export default function PlatformCompaniesPage() {
   const { admin, isLoading } = usePlatformAuth();
@@ -48,76 +58,94 @@ export default function PlatformCompaniesPage() {
   }
 
   return (
-    <PlatformShell>
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-ink">Companies</h1>
-            <p className="text-sm text-muted">Every construction company using BuildOS AI.</p>
+    <PlatformShell breadcrumb="Companies">
+      <div className="space-y-5">
+        <div className="rounded-[14px] border border-[var(--bo-border)] bg-[var(--bo-surface)] p-5 shadow-[var(--bo-shadow-card)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-[17px] font-medium text-[var(--bo-text)]">Companies</h1>
+              <p className="mt-0.5 text-sm text-[var(--bo-text-muted)]">
+                {data ? `${data.total} ${data.total === 1 ? "company" : "companies"}` : "Every construction company using BuildOS AI."}
+              </p>
+            </div>
+            <div className="flex h-10 w-full max-w-xs items-center gap-2 rounded-md border border-[var(--bo-border)] px-3 focus-within:ring-2 focus-within:ring-[var(--bo-focus)]">
+              <Search className="h-4 w-4 shrink-0 text-[var(--bo-text-muted)]" />
+              <label htmlFor="company-search" className="sr-only">
+                Search by name or code
+              </label>
+              <input
+                id="company-search"
+                type="search"
+                placeholder="Search by name or code..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-transparent text-sm text-[var(--bo-text)] placeholder:text-[var(--bo-text-muted)] focus:outline-none"
+              />
+            </div>
           </div>
-          <Input
-            placeholder="Search by name or code..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs"
-          />
-        </div>
 
-        {listLoading && <TableSkeleton rows={6} />}
-        {isError && <ErrorState error={error} onRetry={() => refetch()} />}
-        {data && data.companies.length === 0 && (
-          <EmptyState title="No companies found" hint={search ? "Try a different search." : undefined} />
-        )}
-        {data && data.companies.length > 0 && (
-          <Card className="overflow-x-auto p-0">
-            <table className="w-full text-sm">
-              <thead className="border-b border-border text-left text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Company</th>
-                  <th className="px-4 py-3 font-medium">Code</th>
-                  <th className="px-4 py-3 font-medium">Users</th>
-                  <th className="px-4 py-3 font-medium">Currency</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.companies.map((c) => (
-                  <tr key={c.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-3">
-                      <Link href={`/platform-admin/companies/${c.id}`} className="font-medium text-primary">
-                        {c.name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-muted">{c.code}</td>
-                    <td className="px-4 py-3">{c.user_count}</td>
-                    <td className="px-4 py-3 text-muted">{c.currency}</td>
-                    <td className="px-4 py-3">
-                      {c.is_active ? (
-                        <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">
-                          Suspended
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Button
-                        variant="secondary"
-                        disabled={setSuspended.isPending}
-                        onClick={() => handleToggle(c.id, c.name, c.is_active)}
-                      >
-                        {c.is_active ? "Suspend" : "Reactivate"}
-                      </Button>
-                    </td>
+          {isError && (
+            <div className="mt-4">
+              <ErrorState error={error} onRetry={() => refetch()} />
+            </div>
+          )}
+          {data && data.companies.length === 0 && !isError && (
+            <div className="mt-4">
+              <EmptyState title="No companies found" hint={search ? "Try a different search." : undefined} />
+            </div>
+          )}
+
+          {(listLoading || (data && data.companies.length > 0)) && !isError && (
+            <div className="mt-4 overflow-x-auto rounded-lg border border-[var(--bo-divider)]">
+              <table className="w-full text-sm">
+                <thead className="bg-[var(--bo-canvas)] text-left text-xs font-medium text-[var(--bo-text-muted)]">
+                  <tr>
+                    <th className="px-4 py-3">Company</th>
+                    <th className="px-4 py-3">Code</th>
+                    <th className="px-4 py-3">Users</th>
+                    <th className="px-4 py-3">Currency</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-        )}
+                </thead>
+                <tbody>
+                  {listLoading &&
+                    Array.from({ length: 5 }, (_, i) => <RowSkeleton key={i} />)}
+                  {data?.companies.map((c) => (
+                    <tr key={c.id} className="h-14 border-t border-[var(--bo-divider)]">
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/platform-admin/companies/${c.id}`}
+                          className="font-medium text-[var(--bo-primary)] hover:text-[var(--bo-primary-hover)]"
+                        >
+                          {c.name}
+                        </Link>
+                      </td>
+                      <td className="bo-tabular px-4 py-3 text-[var(--bo-text-muted)]">{c.code}</td>
+                      <td className="bo-tabular px-4 py-3 text-[var(--bo-text)]">{c.user_count}</td>
+                      <td className="px-4 py-3 text-[var(--bo-text-muted)]">{c.currency}</td>
+                      <td className="px-4 py-3">
+                        <StatusBadge active={c.is_active} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          disabled={setSuspended.isPending}
+                          onClick={() => handleToggle(c.id, c.name, c.is_active)}
+                          className={cn(
+                            "h-9 rounded-md border border-[var(--bo-border)] bg-[var(--bo-surface)] px-3 text-sm font-medium text-[var(--bo-text-secondary)] hover:bg-[var(--bo-surface-hover)]",
+                            setSuspended.isPending && "cursor-not-allowed opacity-60"
+                          )}
+                        >
+                          {c.is_active ? "Suspend" : "Reactivate"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </PlatformShell>
   );

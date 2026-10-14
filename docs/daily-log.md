@@ -802,3 +802,10 @@ The existing `UserRole.SUPER_ADMIN` is a **tenant-scoped** role — a company's 
 
 ### Next
 Epic 27 continues: CRM leads/pipeline (BUILD-146) is the next piece with no cross-epic dependency; supplier management/marketplace activity/commissions all wait on the Supplier Portal's marketplace-supplier model existing first.
+
+### Restyle: the real Octax reference, and a process note
+Shortly after Day 28 shipped, Zark pointed out two corrections: the platform-admin login should match the existing ERP login's theme exactly (fixed — it had used a dark `bg-sidebar` background instead of the ERP's light one), and the rest of the portal should follow a specific Dribbble reference (**Octax — CRM Sales Dashboard & Analytics**) with an exact color/spacing spec, which hadn't reached this session. Saved as `docs/design-system-admin-portal.md` (more detailed and authoritative for this portal than the general `docs/design-system.md`).
+
+Restyled within the already-built structure (no backend or route changes): CSS custom properties scoped to a `.buildos-admin` class (never touching the existing ERP's global styles or tokens), a white 256px sidebar with a soft-gray selected row and blue icon instead of the previous dark sidebar, white KPI cards with the reference's signature pale-lavender inset panel and white footer (`components/platform/metric-card.tsx`), and an explicit "not available yet" chart-card shell (`UnavailableChartCard`) for Platform Revenue / Acquisition Sources instead of fabricating charts with no real data behind them — this portal still has no subscriptions/CRM data, so those stay honest placeholders, not invented numbers.
+
+**Process note:** running `npm run build` (to verify the restyle) while the dev server was still running broke the dev server with a 500, because both share the same `.next` directory — exactly the pitfall already in memory. Fixed by restarting `next dev` after the build; this reinforces why the project uses an isolated `.next-e2e` build for Playwright. Re-verified: `tsc --noEmit` clean, `next build` clean (all 32 routes), dev server serving all platform-admin routes and the existing `/dashboard` at 200 again.

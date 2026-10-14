@@ -4,19 +4,29 @@ import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { useFeedback } from "@/components/feedback";
+import { StatusBadge } from "@/components/platform/status-badge";
 import { PlatformShell } from "@/components/platform-shell";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { ErrorState, Skeleton } from "@/components/ui/states";
+import { ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/platform-api";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
 import { usePlatformCompany, useSetCompanySuspended } from "@/lib/use-platform";
+import { cn } from "@/lib/utils";
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between border-b border-border py-2 text-sm last:border-0">
-      <span className="text-muted">{label}</span>
-      <span className="font-medium text-ink">{value}</span>
+    <div className="flex justify-between border-t border-[var(--bo-divider)] py-3 text-sm first:border-0">
+      <span className="text-[var(--bo-text-muted)]">{label}</span>
+      <span className="bo-tabular font-medium text-[var(--bo-text)]">{value}</span>
+    </div>
+  );
+}
+
+function CardSkeleton() {
+  return (
+    <div className="rounded-[14px] border border-[var(--bo-border)] bg-[var(--bo-surface)] p-5">
+      <div className="h-6 w-48 animate-pulse rounded bg-[var(--bo-nav-active)]" />
+      <div className="mt-4 h-4 w-full animate-pulse rounded bg-[var(--bo-nav-active)]" />
+      <div className="mt-2 h-4 w-full animate-pulse rounded bg-[var(--bo-nav-active)]" />
     </div>
   );
 }
@@ -57,43 +67,49 @@ export default function PlatformCompanyDetailPage() {
   }
 
   return (
-    <PlatformShell>
-      <div className="max-w-2xl space-y-6">
-        {companyLoading && (
-          <Card>
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="mt-4 h-4 w-full" />
-            <Skeleton className="mt-2 h-4 w-full" />
-          </Card>
-        )}
+    <PlatformShell breadcrumb={company ? company.name : "Companies"}>
+      <div className="max-w-2xl space-y-5">
+        {companyLoading && <CardSkeleton />}
         {isError && <ErrorState error={error} onRetry={() => refetch()} />}
         {company && (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h1 className="text-xl font-semibold text-ink">{company.name}</h1>
-                <p className="text-sm text-muted">{company.code}</p>
+                <h1 className="text-2xl font-semibold tracking-[-0.025em] text-[var(--bo-text)]">{company.name}</h1>
+                <p className="text-sm text-[var(--bo-text-muted)]">{company.code}</p>
               </div>
-              <Button
-                variant="secondary"
+              <button
                 disabled={setSuspended.isPending}
                 onClick={handleToggle}
+                className={cn(
+                  "h-10 rounded-md border border-[var(--bo-border)] bg-[var(--bo-surface)] px-4 text-sm font-medium text-[var(--bo-text-secondary)] hover:bg-[var(--bo-surface-hover)]",
+                  setSuspended.isPending && "cursor-not-allowed opacity-60"
+                )}
               >
                 {company.is_active ? "Suspend company" : "Reactivate company"}
-              </Button>
+              </button>
             </div>
 
-            <Card>
+            <div className="rounded-[14px] border border-[var(--bo-border)] bg-[var(--bo-surface)] p-5 shadow-[var(--bo-shadow-card)]">
               <Row
                 label="Status"
-                value={company.is_active ? "Active" : `Suspended${company.suspended_at ? ` on ${new Date(company.suspended_at).toLocaleDateString()}` : ""}`}
+                value={
+                  <span className="flex items-center gap-2">
+                    <StatusBadge active={company.is_active} />
+                    {!company.is_active && company.suspended_at && (
+                      <span className="font-normal text-[var(--bo-text-muted)]">
+                        since {new Date(company.suspended_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </span>
+                }
               />
-              <Row label="Users" value={String(company.user_count)} />
+              <Row label="Users" value={company.user_count} />
               <Row label="Currency" value={company.currency} />
               <Row label="Email" value={company.email ?? "—"} />
               <Row label="Phone" value={company.phone ?? "—"} />
               <Row label="Created" value={new Date(company.created_at).toLocaleDateString()} />
-            </Card>
+            </div>
           </>
         )}
       </div>
