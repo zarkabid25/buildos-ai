@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 import { FeedbackProvider, useFeedback } from "@/components/feedback";
 import { ApiError } from "@/lib/api";
 import { AuthProvider } from "@/lib/auth-context";
+import { PlatformAuthProvider } from "@/lib/platform-auth-context";
 
 declare module "@tanstack/react-query" {
   interface Register {
@@ -42,7 +43,9 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <FeedbackProvider>
       <QueryProvider>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <PlatformAuthProvider>{children}</PlatformAuthProvider>
+        </AuthProvider>
       </QueryProvider>
     </FeedbackProvider>
   );

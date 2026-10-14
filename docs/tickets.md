@@ -186,6 +186,22 @@ Full backlog from the product plan, grouped by epic. Status legend: `[ ]` todo, 
 - [~] BUILD-133 AI tests (tool loop, scoping, approval gate, request shape: done; real model behaviour: not testable without a key)
 - [x] BUILD-134 Frontend critical-flow tests (Playwright: sign-up, sign-in/out, invite → join, RFQ → award → PO approval → payment; own backend + build; in CI)
 
+## Epic 27 — Platform Super Admin (BuildOS AI 2.0)
+
+Per `docs/design-system.md` (BuildOS AI 2.0 global UI/UX instructions). A separate, non-tenant interface for BuildOS's own staff, built out incrementally.
+
+- [x] BUILD-143 Platform admin auth (separate `platform_admins` table/login/JWT, distinct token type so tenant and platform tokens can never be used on each other's routes; no self-registration, only `scripts/create_platform_admin.py`)
+- [x] BUILD-144 Company management (list/search/view every tenant, user counts; suspend/reactivate — suspending blocks new logins and invalidates existing sessions immediately)
+- [x] BUILD-145 Business dashboard (active/suspended companies, total users, new companies in 30 days — real numbers only; MRR/leads/supplier-verification counts shown as not-yet-available, not fabricated)
+- [ ] BUILD-146 CRM leads and pipeline (needs its own data model — leads, contacts, deals, pipeline stages; not started)
+- [ ] BUILD-147 Supplier management and verification (needs the marketplace supplier model from Portal 3 first)
+- [ ] BUILD-148 Marketplace activity (needs RFQ/quotation data to span suppliers across companies, not just within one)
+- [ ] BUILD-149 Subscription management (needs a billing/plan model — no payment provider chosen yet)
+- [ ] BUILD-150 Commission tracking (needs the marketplace order model)
+- [ ] BUILD-151 Payments and invoices (platform-level, i.e. BuildOS billing its own customers — distinct from the existing tenant-level `payments` module)
+- [ ] BUILD-152 Support tickets
+- [ ] BUILD-153 AI business intelligence
+
 ## Epic 26 — Deployment
 - [~] BUILD-135 Production Docker setup (Dockerfile.prod for both apps + deploy/docker-compose.prod.yml; production `next build` and migrations verified, but no Docker on this machine, so the images themselves have not been built)
 - [ ] BUILD-136 Production database (needs a decision: containerised Postgres as in the compose file, or a managed service. Migration chain verified on a fresh Postgres 17)

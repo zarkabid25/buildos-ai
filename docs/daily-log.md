@@ -773,3 +773,32 @@ Measured first: per test, about **1 s** went on dropping and re-creating all 44 
 ### Security: Next.js 14.2.5 → 14.2.35
 `npm audit` (production dependencies) flagged the pinned **Next.js 14.2.5** with many published advisories. Upgraded to **14.2.35**, the last 14.2 patch release: drop-in, no API changes, fixes most of them, including the middleware authorization bypass (this app has no middleware, so it wasn't exposed). Versions stay pinned exactly, and the lockfile was re-synced so CI's `npm ci` accepts it. Type-check clean, and all 4 browser tests pass against a production build on 14.2.35.
 **Still open:** a set of advisories is fixed only in **Next.js 15.5+**, including two critical ones (remote code execution in the image optimizer with AVIF files, and on Windows-hosted servers). That's a major upgrade (React 19, changed caching and request APIs). The app is all client components, so it should be manageable, but it needs its own planned and tested change. Recommended as the next infrastructure task.
+
+---
+
+## Day 28 — 2026-10-15 — Platform Super Admin, part 1 (BUILD-143, 144, 145)
+
+Zark shared the BuildOS AI 2.0 global UI/UX design instructions (saved as `docs/design-system.md`, now mandatory for all new frontend work per `CLAUDE.md`), covering four interfaces: Platform Super Admin, the existing Construction Company Portal, a Supplier Portal, and a public marketing site. Asked where to start: **Platform Super Admin**, the interface needing the most new backend.
+
+### Why a separate admin, not just another role
+The existing `UserRole.SUPER_ADMIN` is a **tenant-scoped** role — a company's own top admin, still filtered to that one `company_id` everywhere. A true platform admin needs to see across *every* company, which is the opposite of CLAUDE.md rule 10 (tenant isolation) for every other endpoint in the app. Reusing the tenant `User`/JWT path for that would risk a bug where a platform route reuses tenant-scoped query code and leaks across tenants, or worse, where a tenant token accidentally works on a platform route. So this is a **deliberately separate system**, kept apart on purpose:
+- A new `platform_admins` table (no `company_id` — the one legitimate exception to rule 9, since platform admins aren't a tenant).
+- New JWT token types `platform_access` / `platform_refresh`, distinct from `access` / `refresh`. `get_current_user` and the new `get_current_platform_admin` each check for their own type string, so one can never be used as the other — verified directly rather than assumed (see tests below).
+- No self-registration. The only way to create one is `backend/scripts/create_platform_admin.py`, run by whoever already has server access.
+
+### What's built
+- **BUILD-143** Platform admin auth: `/api/v1/platform/auth/login|refresh|me`, same login-attempt rate limiting as tenant login.
+- **BUILD-144** Company management: `/api/v1/platform/companies` (list with search, real user counts per company) and `/{id}`, plus `/{id}/suspend` and `/{id}/reactivate`. Suspending a company is enforced in two places, not one: it blocks new logins (`auth_service.login`/`refresh`) *and* kills already-issued sessions immediately (`get_current_user` now also checks `user.company.is_active` on every request) — tested directly, not assumed, by logging in, suspending, then re-calling `/auth/me` with the still-unexpired token and confirming 401.
+- **BUILD-145** Business dashboard: `/api/v1/platform/dashboard` — active/suspended company counts, total users, companies created in the last 30 days. MRR, new leads and pending supplier verifications are typed as `int | None` / `float | None` and returned as `null` with a description explaining why, rather than a fabricated number, since there's no subscriptions/CRM/marketplace data yet (same "no fabricated data" discipline as the health score and executive summary).
+- Migration **0022** (`platform_admins` table; `companies.is_active`/`suspended_at`). Applied to the dev Postgres (0021 → 0022) and re-ran the CI drift check directly against it afterward — clean.
+- Frontend: `/platform-admin/login`, `/dashboard`, `/companies`, `/companies/[id]`, a separate dark-sidebar `PlatformShell` per the new design doc's Portal 1 spec. Deliberately **parallel, not shared, auth plumbing**: `platform-auth-store.ts` / `platform-api.ts` / `platform-auth-context.tsx` mirror the existing tenant versions but use their own localStorage key and `/platform/auth/refresh`, so a platform-admin session and a tenant session can coexist in the same browser without one overwriting the other. Suspend/reactivate goes through the existing shared confirmation-dialog system (`useFeedback().confirm`), danger-styled for suspend.
+- Tests: `tests/test_platform_http.py` (15): login success/failure/disabled-account, the mutual token-type isolation (a tenant token on a platform route, and vice versa, both 401), refresh-token-can't-be-used-as-access-token, company list spans tenants, user counts are real, suspend blocks new logins *and* kills existing sessions, reactivate restores login, 404 on an unknown company id, and the dashboard's null-for-unbuilt-features contract. `test_api_authorization_http.py`'s public-endpoint list was updated for the two public platform auth routes (no new test functions there, just the allow-list).
+
+### Verified
+- Full backend suite: **320 passed** (was 305 on Day 27; +15, exactly the new platform file — no regressions elsewhere).
+- Frontend: `tsc --noEmit` clean, `next build` succeeds — all 5 new routes compile (`/platform-admin`, `/login`, `/dashboard`, `/companies`, `/companies/[id]`).
+- Live: created the first platform admin on the dev DB directly via the ORM (not the script — `getpass` reads the controlling TTY directly and hangs when stdin is piped non-interactively, so the script needs a real terminal), logged in against the running dev backend on `:8010`, confirmed a real token pair came back.
+- **Not yet done**: no Playwright browser test for the platform-admin flow yet (BUILD-134 only covers the tenant app so far) — recommended next if this surface keeps growing. The suspend/reactivate UI itself was build-checked and API-verified, but not clicked through in an actual browser this session.
+
+### Next
+Epic 27 continues: CRM leads/pipeline (BUILD-146) is the next piece with no cross-epic dependency; supplier management/marketplace activity/commissions all wait on the Supplier Portal's marketplace-supplier model existing first.

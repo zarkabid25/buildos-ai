@@ -48,6 +48,8 @@ def login(db: Session, payload: LoginRequest) -> tuple[User, TokenPair]:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
     if not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "User account is disabled")
+    if not user.company.is_active:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This company's account has been suspended")
 
     return user, issue_tokens(user)
 
@@ -63,7 +65,7 @@ def refresh(db: Session, refresh_token: str) -> TokenPair:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
 
     user = db.query(User).filter(User.id == user_id).first()
-    if not user or not user.is_active:
+    if not user or not user.is_active or not user.company.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
 
     return issue_tokens(user)

@@ -24,7 +24,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(truncated, hashed_password.encode("utf-8"))
 
 
-def _create_token(subject: str, expires_delta: timedelta, token_type: Literal["access", "refresh"]) -> str:
+def _create_token(
+    subject: str,
+    expires_delta: timedelta,
+    token_type: Literal["access", "refresh", "platform_access", "platform_refresh"],
+) -> str:
     now = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
         "sub": subject,
@@ -45,6 +49,18 @@ def create_access_token(user_id: str) -> str:
 def create_refresh_token(user_id: str) -> str:
     return _create_token(
         user_id, timedelta(days=settings.refresh_token_expire_days), "refresh"
+    )
+
+
+def create_platform_access_token(admin_id: str) -> str:
+    return _create_token(
+        admin_id, timedelta(minutes=settings.access_token_expire_minutes), "platform_access"
+    )
+
+
+def create_platform_refresh_token(admin_id: str) -> str:
+    return _create_token(
+        admin_id, timedelta(days=settings.refresh_token_expire_days), "platform_refresh"
     )
 
 
