@@ -6,17 +6,21 @@ import uuid
 
 from app.core.security import hash_password
 from app.db.session import SessionLocal
+from app.models.enums import PlatformStaffRole
 from app.models.platform_admin import PlatformAdmin
 
 
-def make_platform_admin(email: str = "admin@buildos.ai", password: str = "password123") -> None:
+def make_platform_admin(email: str = "admin@buildos.ai", password: str = "password123", role: PlatformStaffRole | None = None) -> None:
     with SessionLocal() as db:
-        db.add(PlatformAdmin(email=email, full_name="Platform Admin", hashed_password=hash_password(password)))
+        kwargs = {"role": role} if role is not None else {}
+        db.add(PlatformAdmin(email=email, full_name="Platform Admin", hashed_password=hash_password(password), **kwargs))
         db.commit()
 
 
-def platform_login(client, email: str = "admin@buildos.ai", password: str = "password123") -> dict[str, str]:
-    make_platform_admin(email, password)
+def platform_login(
+    client, email: str = "admin@buildos.ai", password: str = "password123", role: PlatformStaffRole | None = None
+) -> dict[str, str]:
+    make_platform_admin(email, password, role)
     res = client.post("/api/v1/platform/auth/login", json={"email": email, "password": password})
     assert res.status_code == 200, res.text
     return {"Authorization": f"Bearer {res.json()['access_token']}"}

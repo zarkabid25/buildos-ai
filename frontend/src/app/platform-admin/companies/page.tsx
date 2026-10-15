@@ -11,13 +11,13 @@ import { StatusBadge } from "@/components/platform/status-badge";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/platform-api";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
-import { usePlatformCompanies, useSetCompanySuspended } from "@/lib/use-platform";
+import { useApproveCompany, usePlatformCompanies, useSetCompanySuspended } from "@/lib/use-platform";
 import { cn } from "@/lib/utils";
 
 function RowSkeleton() {
   return (
     <tr className="border-b border-[var(--bo-divider)] last:border-0">
-      <td className="px-4 py-4" colSpan={6}>
+      <td className="px-4 py-4" colSpan={7}>
         <div className="h-4 w-full animate-pulse rounded bg-[var(--bo-nav-active)]" />
       </td>
     </tr>
@@ -32,6 +32,7 @@ export default function PlatformCompaniesPage() {
 
   const { data, isLoading: listLoading, isError, error, refetch } = usePlatformCompanies(search);
   const setSuspended = useSetCompanySuspended();
+  const approveCompany = useApproveCompany();
 
   useEffect(() => {
     if (!isLoading && !admin) router.replace("/platform-admin/login");
@@ -52,6 +53,15 @@ export default function PlatformCompaniesPage() {
     try {
       await setSuspended.mutateAsync({ id, suspend });
       toast(suspend ? `${name} suspended.` : `${name} reactivated.`, "success");
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Something went wrong.", "error");
+    }
+  }
+
+  async function handleApprove(id: string, name: string) {
+    try {
+      await approveCompany.mutateAsync(id);
+      toast(`${name} approved.`, "success");
     } catch (err) {
       toast(err instanceof ApiError ? err.message : "Something went wrong.", "error");
     }
@@ -105,6 +115,7 @@ export default function PlatformCompaniesPage() {
                     <th className="px-4 py-3">Users</th>
                     <th className="px-4 py-3">Currency</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Onboarding</th>
                     <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
@@ -127,17 +138,35 @@ export default function PlatformCompaniesPage() {
                       <td className="px-4 py-3">
                         <StatusBadge active={c.is_active} />
                       </td>
+                      <td className="px-4 py-3">
+                        {c.onboarding_status === "approved" ? (
+                          <span className="text-xs text-[var(--bo-success)]">Approved</span>
+                        ) : (
+                          <span className="text-xs text-[#8A5B09]">Pending</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right">
-                        <button
-                          disabled={setSuspended.isPending}
-                          onClick={() => handleToggle(c.id, c.name, c.is_active)}
-                          className={cn(
-                            "h-9 rounded-md border border-[var(--bo-border)] bg-[var(--bo-surface)] px-3 text-sm font-medium text-[var(--bo-text-secondary)] hover:bg-[var(--bo-surface-hover)]",
-                            setSuspended.isPending && "cursor-not-allowed opacity-60"
+                        <div className="flex justify-end gap-2">
+                          {c.onboarding_status === "pending" && (
+                            <button
+                              disabled={approveCompany.isPending}
+                              onClick={() => handleApprove(c.id, c.name)}
+                              className="h-9 rounded-md bg-[var(--bo-primary)] px-3 text-sm font-medium text-[var(--bo-on-primary)] hover:bg-[var(--bo-primary-hover)]"
+                            >
+                              Approve
+                            </button>
                           )}
-                        >
-                          {c.is_active ? "Suspend" : "Reactivate"}
-                        </button>
+                          <button
+                            disabled={setSuspended.isPending}
+                            onClick={() => handleToggle(c.id, c.name, c.is_active)}
+                            className={cn(
+                              "h-9 rounded-md border border-[var(--bo-border)] bg-[var(--bo-surface)] px-3 text-sm font-medium text-[var(--bo-text-secondary)] hover:bg-[var(--bo-surface-hover)]",
+                              setSuspended.isPending && "cursor-not-allowed opacity-60"
+                            )}
+                          >
+                            {c.is_active ? "Suspend" : "Reactivate"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

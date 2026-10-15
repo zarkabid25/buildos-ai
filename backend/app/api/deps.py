@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_token
 from app.db.session import get_db
-from app.models.enums import UserRole
+from app.models.enums import PlatformStaffRole, UserRole
 from app.models.platform_admin import PlatformAdmin
 from app.models.user import User
 
@@ -67,5 +67,14 @@ def require_roles(*allowed_roles: UserRole) -> Callable[[User], User]:
         if user.role not in allowed_roles:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient permissions")
         return user
+
+    return _check
+
+
+def require_platform_roles(*allowed_roles: PlatformStaffRole) -> Callable[[PlatformAdmin], PlatformAdmin]:
+    def _check(admin: PlatformAdmin = Depends(get_current_platform_admin)) -> PlatformAdmin:
+        if admin.role not in allowed_roles:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient permissions")
+        return admin
 
     return _check

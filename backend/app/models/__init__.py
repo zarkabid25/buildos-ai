@@ -44,3 +44,5 @@ from app.models.rfq import Quotation, QuotationItem, Rfq, RfqItem, RfqSupplier  
 from app.models.payment import ClientReceipt, SupplierPayment  # noqa: F401
 from app.models.invitation import Invitation  # noqa: F401
 from app.models.platform_admin import PlatformAdmin  # noqa: F401
+from app.models.platform_audit import PlatformAuditLog  # noqa: F401
+from app.models.platform_invitation import PlatformInvitation  # noqa: F401

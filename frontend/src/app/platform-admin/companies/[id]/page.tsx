@@ -9,7 +9,7 @@ import { PlatformShell } from "@/components/platform-shell";
 import { ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/platform-api";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
-import { usePlatformCompany, useSetCompanySuspended } from "@/lib/use-platform";
+import { useApproveCompany, usePlatformCompany, useSetCompanySuspended } from "@/lib/use-platform";
 import { cn } from "@/lib/utils";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -39,6 +39,7 @@ export default function PlatformCompanyDetailPage() {
 
   const { data: company, isLoading: companyLoading, isError, error, refetch } = usePlatformCompany(params.id);
   const setSuspended = useSetCompanySuspended();
+  const approveCompany = useApproveCompany();
 
   useEffect(() => {
     if (!isLoading && !admin) router.replace("/platform-admin/login");
@@ -66,6 +67,16 @@ export default function PlatformCompanyDetailPage() {
     }
   }
 
+  async function handleApprove() {
+    if (!company) return;
+    try {
+      await approveCompany.mutateAsync(company.id);
+      toast(`${company.name} approved.`, "success");
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Something went wrong.", "error");
+    }
+  }
+
   return (
     <PlatformShell breadcrumb={company ? company.name : "Companies"}>
       <div className="max-w-2xl space-y-5">
@@ -78,16 +89,30 @@ export default function PlatformCompanyDetailPage() {
                 <h1 className="text-2xl font-semibold tracking-[-0.025em] text-[var(--bo-text)]">{company.name}</h1>
                 <p className="text-sm text-[var(--bo-text-muted)]">{company.code}</p>
               </div>
-              <button
-                disabled={setSuspended.isPending}
-                onClick={handleToggle}
-                className={cn(
-                  "h-10 rounded-md border border-[var(--bo-border)] bg-[var(--bo-surface)] px-4 text-sm font-medium text-[var(--bo-text-secondary)] hover:bg-[var(--bo-surface-hover)]",
-                  setSuspended.isPending && "cursor-not-allowed opacity-60"
+              <div className="flex gap-2">
+                {company.onboarding_status === "pending" && (
+                  <button
+                    disabled={approveCompany.isPending}
+                    onClick={handleApprove}
+                    className={cn(
+                      "h-10 rounded-md bg-[var(--bo-primary)] px-4 text-sm font-medium text-[var(--bo-on-primary)] hover:bg-[var(--bo-primary-hover)]",
+                      approveCompany.isPending && "cursor-not-allowed opacity-60"
+                    )}
+                  >
+                    Approve company
+                  </button>
                 )}
-              >
-                {company.is_active ? "Suspend company" : "Reactivate company"}
-              </button>
+                <button
+                  disabled={setSuspended.isPending}
+                  onClick={handleToggle}
+                  className={cn(
+                    "h-10 rounded-md border border-[var(--bo-border)] bg-[var(--bo-surface)] px-4 text-sm font-medium text-[var(--bo-text-secondary)] hover:bg-[var(--bo-surface-hover)]",
+                    setSuspended.isPending && "cursor-not-allowed opacity-60"
+                  )}
+                >
+                  {company.is_active ? "Suspend company" : "Reactivate company"}
+                </button>
+              </div>
             </div>
 
             <div className="rounded-[14px] border border-[var(--bo-border)] bg-[var(--bo-surface)] p-5 shadow-[var(--bo-shadow-card)]">
@@ -102,6 +127,16 @@ export default function PlatformCompanyDetailPage() {
                       </span>
                     )}
                   </span>
+                }
+              />
+              <Row
+                label="Onboarding"
+                value={
+                  company.onboarding_status === "approved" ? (
+                    <span className="text-[var(--bo-success)]">Approved</span>
+                  ) : (
+                    <span className="text-[#8A5B09]">Pending review</span>
+                  )
                 }
               />
               <Row label="Users" value={company.user_count} />

@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import TimestampedBase
+from app.models.enums import CompanyOnboardingStatus
 
 
 class Company(TimestampedBase):
@@ -19,5 +20,12 @@ class Company(TimestampedBase):
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Platform-staff workflow status only -- never gates tenant login/registration
+    # (PLAT-009). New companies start PENDING; pre-existing ones are APPROVED.
+    onboarding_status: Mapped[CompanyOnboardingStatus] = mapped_column(
+        Enum(CompanyOnboardingStatus, native_enum=False, length=20, values_callable=lambda e: [x.value for x in e]),
+        default=CompanyOnboardingStatus.PENDING,
+        nullable=False,
+    )
 
     users: Mapped[list["User"]] = relationship(back_populates="company")  # noqa: F821

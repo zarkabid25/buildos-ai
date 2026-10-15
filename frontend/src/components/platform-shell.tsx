@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Building2, LayoutGrid, Menu, Search, X } from "lucide-react";
+import { Building2, LayoutGrid, ListChecks, Menu, Search, Users, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { label: "Overview", href: "/platform-admin/dashboard", icon: LayoutGrid },
   { label: "Companies", href: "/platform-admin/companies", icon: Building2 },
+  { label: "Staff", href: "/platform-admin/staff", icon: Users },
+  { label: "Audit Log", href: "/platform-admin/audit", icon: ListChecks },
 ];
 
 export function PlatformShell({ children, breadcrumb }: { children: ReactNode; breadcrumb: string }) {

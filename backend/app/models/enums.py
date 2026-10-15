@@ -109,3 +109,21 @@ class PaymentMethod(str, enum.Enum):
     CHEQUE = "cheque"
     CASH = "cash"
     OTHER = "other"
+
+
+class PlatformStaffRole(str, enum.Enum):
+    """Platform staff permissions (PLAT-006). Separate from the tenant UserRole --
+    a platform staff account is never a tenant User and vice versa."""
+
+    OWNER = "owner"  # can also manage other staff (invite, change role, deactivate)
+    ADMIN = "admin"  # can approve/suspend companies; cannot manage staff
+    SUPPORT = "support"  # read-only
+
+
+class CompanyOnboardingStatus(str, enum.Enum):
+    """Tracked by platform staff only -- does not gate tenant login or
+    registration. A new company starts 'pending'; every company that existed
+    before this field was added is backfilled to 'approved' (migration 0023)."""
+
+    PENDING = "pending"
+    APPROVED = "approved"

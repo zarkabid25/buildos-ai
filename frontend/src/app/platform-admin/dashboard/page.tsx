@@ -79,6 +79,19 @@ export default function PlatformDashboardPage() {
           </div>
         )}
 
+        {data && data.pending_approval_companies > 0 && (
+          <ChartCard title="Companies awaiting approval">
+            <p className="text-sm text-[var(--bo-text-secondary)]">
+              <span className="bo-tabular font-medium text-[#8A5B09]">{data.pending_approval_companies}</span>{" "}
+              {data.pending_approval_companies === 1 ? "company hasn't" : "companies haven't"} been reviewed yet.{" "}
+              <a href="/platform-admin/companies" className="font-medium text-[var(--bo-primary)]">
+                Review in Companies
+              </a>
+              .
+            </p>
+          </ChartCard>
+        )}
+
         {data && data.suspended_companies > 0 && (
           <ChartCard title="Suspended companies">
             <p className="text-sm text-[var(--bo-text-secondary)]">

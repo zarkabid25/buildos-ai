@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import models  # noqa: E402,F401
 from app.core.security import hash_password  # noqa: E402
 from app.db.session import SessionLocal  # noqa: E402
+from app.models.enums import PlatformStaffRole  # noqa: E402
 from app.models.platform_admin import PlatformAdmin  # noqa: E402
 
 
@@ -42,10 +43,15 @@ def main() -> None:
             db.commit()
             print(f"Updated existing platform admin {email}.")
         else:
-            admin = PlatformAdmin(email=email, full_name=full_name, hashed_password=hash_password(password))
+            # Bootstrap access is trusted (shell access to the server already implies
+            # it), so a script-created account starts as an owner, able to invite
+            # and manage further staff via the app itself from here on.
+            admin = PlatformAdmin(
+                email=email, full_name=full_name, hashed_password=hash_password(password), role=PlatformStaffRole.OWNER
+            )
             db.add(admin)
             db.commit()
-            print(f"Created platform admin {email}.")
+            print(f"Created platform admin {email} (owner).")
 
 
 if __name__ == "__main__":

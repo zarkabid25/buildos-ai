@@ -1,7 +1,8 @@
-from sqlalchemy import Boolean, String
+from sqlalchemy import Boolean, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base_class import TimestampedBase
+from app.models.enums import PlatformStaffRole
 
 
 class PlatformAdmin(TimestampedBase):
@@ -15,3 +16,8 @@ class PlatformAdmin(TimestampedBase):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    role: Mapped[PlatformStaffRole] = mapped_column(
+        Enum(PlatformStaffRole, native_enum=False, length=20, values_callable=lambda e: [x.value for x in e]),
+        default=PlatformStaffRole.ADMIN,
+        nullable=False,
+    )
