@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, Field
@@ -75,6 +75,23 @@ class UpdateConnectionRequest(BaseModel):
 
 class InviteSuppliersRequest(BaseModel):
     marketplace_supplier_ids: list[uuid.UUID] = Field(min_length=1)
+
+
+class AssistedQuotationItemInput(BaseModel):
+    rfq_item_id: uuid.UUID
+    rate: Decimal = Field(ge=0)
+
+
+class AssistedQuotationCreate(BaseModel):
+    """Same shape as the real QuotationCreate, minus supplier_id -- the server
+    resolves that from the company's connection to this marketplace supplier,
+    so platform staff can't accidentally (or otherwise) submit a quotation
+    against a different supplier than the one they're assisting."""
+
+    delivery_days: int | None = Field(default=None, ge=0, le=3650)
+    valid_until: date | None = None
+    notes: str | None = Field(default=None, max_length=500)
+    items: list[AssistedQuotationItemInput] = Field(min_length=1)
 
 
 class MarketplaceInvitationRead(BaseModel):

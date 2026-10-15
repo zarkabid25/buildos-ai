@@ -27,6 +27,7 @@ from app.models.material import MaterialCategory
 from app.models.procurement import GoodsReceipt
 from app.models.rfq import Rfq, RfqSupplier
 from app.schemas.marketplace_integration import (
+    AssistedQuotationCreate,
     CompanySupplierConnectionRead,
     ConnectSupplierRequest,
     DeliveryReportCreate,
@@ -351,7 +352,7 @@ def record_quotation_for_marketplace_supplier(
     company_id: uuid.UUID,
     rfq_id: uuid.UUID,
     marketplace_supplier_id: uuid.UUID,
-    payload: QuotationCreate,
+    payload: AssistedQuotationCreate,
 ) -> Rfq:
     """Platform staff entering a quotation on a connected marketplace supplier's
     behalf. The ERP record of who created it is attributed to the RFQ's own
@@ -367,8 +368,8 @@ def record_quotation_for_marketplace_supplier(
     if not link or not link.erp_supplier_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "This supplier isn't connected with a linked ERP supplier yet")
 
-    payload.supplier_id = link.erp_supplier_id
-    result = rfq_service.record_quotation(db, company_id, rfq.created_by_id, rfq_id, payload)
+    quotation_payload = QuotationCreate(supplier_id=link.erp_supplier_id, **payload.model_dump())
+    result = rfq_service.record_quotation(db, company_id, rfq.created_by_id, rfq_id, quotation_payload)
     mark_invitation_quoted(db, company_id, rfq_id, link.erp_supplier_id)
     mkt_supplier = _get_marketplace_supplier(db, marketplace_supplier_id)
     platform_audit_service.record(
@@ -459,13 +460,19 @@ def find_eligible_suppliers(db: Session, company_id: uuid.UUID, material_id: uui
         results.append(_to_match(db, product, supplier, "material_mapping"))
         seen_product_ids.add(product.id)
 
-    # Fallback: category name match, only if a category is set on the material.
+    # Fallback: category match, only if a category is set on the material.
+    # Matches either the supplier's own declared category tags (PLAT-019) or,
+    # if set, the product's own (more granular) category field.
     if category_name:
         candidates = (
             db.query(MarketplaceProduct, MarketplaceSupplier)
             .join(MarketplaceSupplier, MarketplaceSupplier.id == MarketplaceProduct.supplier_id)
+            .outerjoin(MarketplaceSupplierCategory, MarketplaceSupplierCategory.supplier_id == MarketplaceSupplier.id)
             .filter(MarketplaceSupplier.verification_status == MarketplaceSupplierStatus.VERIFIED, MarketplaceProduct.is_active.is_(True))
-            .filter(MarketplaceProduct.category.ilike(category_name))
+            .filter(
+                (MarketplaceSupplierCategory.category.ilike(category_name))
+                | (MarketplaceProduct.category.ilike(category_name))
+            )
             .all()
         )
         for product, supplier in candidates:

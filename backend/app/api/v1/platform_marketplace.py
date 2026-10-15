@@ -29,6 +29,7 @@ from app.schemas.marketplace_supplier import (
     MarketplaceVerificationUpdate,
 )
 from app.schemas.marketplace_integration import (
+    AssistedQuotationCreate,
     DeliveryReportCreate,
     DeliveryReportRead,
     InviteSuppliersRequest,
@@ -37,7 +38,7 @@ from app.schemas.marketplace_integration import (
     SupplierMatch,
 )
 from app.schemas.platform import PlatformAuditEntry
-from app.schemas.rfq import QuotationCreate, RfqRead
+from app.schemas.rfq import RfqRead
 from app.services import marketplace_integration_service, marketplace_supplier_service, rfq_service
 
 router = APIRouter(prefix="/platform/marketplace", tags=["platform-marketplace"])
@@ -208,7 +209,7 @@ def assist_record_quotation(
     company_id: uuid.UUID,
     rfq_id: uuid.UUID,
     marketplace_supplier_id: uuid.UUID,
-    payload: QuotationCreate,
+    payload: AssistedQuotationCreate,
     db: Session = Depends(get_db),
     admin: PlatformAdmin = Depends(_can_edit),
 ) -> RfqRead:
