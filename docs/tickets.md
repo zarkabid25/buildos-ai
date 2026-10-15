@@ -198,7 +198,12 @@ Per `docs/design-system.md` (BuildOS AI 2.0 global UI/UX instructions). A separa
 - [x] PLAT-008 Platform dashboard, company directory, company detail (extended from BUILD-144/145 with onboarding status)
 - [x] PLAT-009 Company onboarding status + approve/suspend with audit history (`companies.onboarding_status`, new `platform_audit_log` table; does not gate tenant login)
 - [x] PLAT-010 Staff invitations and role management (`platform_invitations`, mirrors the tenant invite flow; owner-only)
-- [ ] BUILD-146 CRM leads and pipeline (needs its own data model — leads, contacts, deals, pipeline stages; not started)
+- [x] PLAT-011 CRM organizations and contacts (`crm_organizations`/`crm_contacts`; distinct from tenant `Company` until converted)
+- [x] PLAT-012 Lead creation, assignment, two pipelines (SaaS sales / supplier acquisition), lead source tracking
+- [x] PLAT-013 Deal Kanban + list views (`/platform-admin/crm`, stage-column Kanban with a per-card stage selector, no drag-and-drop library added)
+- [x] PLAT-014 Calls/meetings/notes/reminders (`crm_activities`) + follow-up dashboard (`/platform-admin/crm/follow-ups`, open dated tasks, soonest due first)
+- [x] PLAT-015 Convert lead to company onboarding (idempotent; either creates a new `Company` or links an authorized-confirmed existing one — never both, never silently double-creates)
+- [x] BUILD-146 CRM leads and pipeline (superseded by PLAT-011..015 above)
 - [ ] BUILD-147 Supplier management and verification (needs the marketplace supplier model from Portal 3 first)
 - [ ] BUILD-148 Marketplace activity (needs RFQ/quotation data to span suppliers across companies, not just within one)
 - [ ] BUILD-149 Subscription management (needs a billing/plan model — no payment provider chosen yet)

@@ -2,17 +2,19 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Building2, LayoutGrid, ListChecks, Menu, Search, Users, X } from "lucide-react";
+import { Building2, CalendarClock, LayoutGrid, ListChecks, Menu, Search, Users2, Users, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
 import { cn } from "@/lib/utils";
 
-// Only destinations that actually exist. Epic 27's remaining items (Leads,
-// Suppliers, RFQs, Commissions, Revenue Reports...) all need backend that isn't
-// built yet -- see docs/tickets.md -- so they aren't shown as dead links here.
+// Only destinations that actually exist. Epic 27's remaining items (Suppliers,
+// RFQs, Commissions, Revenue Reports...) all need backend that isn't built yet
+// -- see docs/tickets.md -- so they aren't shown as dead links here.
 const NAV_ITEMS = [
   { label: "Overview", href: "/platform-admin/dashboard", icon: LayoutGrid },
   { label: "Companies", href: "/platform-admin/companies", icon: Building2 },
+  { label: "CRM", href: "/platform-admin/crm", icon: Users2 },
+  { label: "Follow-ups", href: "/platform-admin/crm/follow-ups", icon: CalendarClock },
   { label: "Staff", href: "/platform-admin/staff", icon: Users },
   { label: "Audit Log", href: "/platform-admin/audit", icon: ListChecks },
 ];
@@ -71,7 +73,10 @@ export function PlatformShell({ children, breadcrumb }: { children: ReactNode; b
         <nav className="flex-1 space-y-1 px-3">
           <div className="px-2 pb-1 text-xs font-medium text-[var(--bo-text-muted)]">Workspace</div>
           {NAV_ITEMS.map((item) => {
-            const active = pathname === item.href;
+            const active =
+              item.href === "/platform-admin/crm"
+                ? pathname === item.href || (pathname.startsWith(item.href) && !pathname.startsWith("/platform-admin/crm/follow-ups"))
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
             return (
               <Link

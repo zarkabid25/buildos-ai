@@ -46,3 +46,4 @@ from app.models.invitation import Invitation  # noqa: F401
 from app.models.platform_admin import PlatformAdmin  # noqa: F401
 from app.models.platform_audit import PlatformAuditLog  # noqa: F401
 from app.models.platform_invitation import PlatformInvitation  # noqa: F401
+from app.models.crm import CrmOrganization, CrmContact, CrmActivity  # noqa: F401

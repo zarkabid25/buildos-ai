@@ -832,3 +832,29 @@ Zark asked for BuildOS AI 2.0 Phase 1 (PLAT-006..010), reusing the existing plat
 
 ### Remaining work
 CRM (BUILD-146) and the marketplace supplier model (BUILD-147/148) are unstarted — per the Day 28 audit, the marketplace supplier identity needs to be genuinely new (the existing `Supplier` model is tenant-owned and suppliers don't log in today), not an extension of what exists. Subscriptions/commissions (BUILD-149/150) are blocked on a payment-provider decision. No Playwright coverage yet for the platform-admin flows (staff invite, company approval) — still only the tenant app's flows are covered by BUILD-134.
+
+---
+
+## Day 30 — 2026-10-15 — Business CRM: pipelines, activities, follow-ups, conversion (PLAT-011..015)
+
+Zark asked for BuildOS AI 2.0 Phase 2 (PLAT-011..015): CRM organizations/contacts, two pipelines (SaaS sales, supplier acquisition), a Kanban + list view, activities and a follow-up dashboard, and lead-to-company conversion. Explicit constraints: CRM records stay distinct from ERP companies until conversion; conversion must be idempotent and support linking an authorized-confirmed existing company; don't touch ERP projects/procurement/inventory/finance.
+
+### Data model
+- **`CrmOrganization`**: the record a Kanban card represents (one org = one deal, no separate Deal table — the pipeline/stage lives directly on the organization). `pipeline_type` (`saas_sales` / `supplier_acquisition`) and `stage` are both plain strings (same convention as `RfqStatus`), so adding a stage later needs no migration. No `company_id` — this is a platform-owned record, not a tenant one. `converted_company_id` is the only link to the real `Company` table, set once at conversion.
+- **`CrmContact`**: people at the organization. **`CrmActivity`**: calls, meetings, notes and reminders are one model — a reminder is just a `task` activity with `due_at` set, which is what the follow-up dashboard queries on (`due_at` not null, `completed_at` null, soonest first).
+- Migration **0024**, purely additive. Applied to the dev Postgres (0023 → 0024); the first drift check caught three indexes the migration created that the models didn't declare (`index=True` was missing on `pipeline_type`, `stage`, `due_at`) — fixed and re-verified clean, rather than leaving the drift check silently wrong.
+
+### Permissions
+Same two-tier gate as company approval: **owner/admin** can create organizations, change stage/assignment, and convert; **support** is read-only on organizations but can still log calls/meetings/notes (logging what happened on a call shouldn't need elevated permission). Verified directly: support gets 403 on create/edit/convert, 200 on list/view/log-activity.
+
+### Conversion (PLAT-015)
+Two paths, exactly one per call: `create_company_name`/`create_company_code` makes a brand new `Company` (starts `onboarding_status: pending`, same workflow as any other new company — conversion doesn't bypass platform approval); `link_existing_company_id` connects to a company that already exists (e.g. self-registered before the CRM record caught up). **Idempotent**: calling convert again on an already-converted lead returns the same `company_id` with `already_converted: true` instead of erroring or creating a second company — verified by calling it twice and checking only one company exists. **Authorized match only**: linking a company already linked to a different CRM lead is refused (409), so one company can't be silently claimed by two leads.
+
+### Frontend
+`/platform-admin/crm` (pipeline tabs, Kanban columns by stage with a per-card stage-change dropdown — no drag-and-drop library added, matching CLAUDE.md's "don't add dependencies without justification" — plus a list view), `/platform-admin/crm/[id]` (contacts, activity log, convert actions), `/platform-admin/crm/follow-ups` (open reminders, overdue ones flagged, mark-done). Added "CRM" and "Follow-ups" to the sidebar.
+
+### Verified
+- New tests: `tests/test_platform_crm_http.py` (13) — CRM records stay distinct from `/platform/companies` until conversion, pipeline filtering, assignment, support-role permission boundaries (create/edit/convert blocked, view/log-activity allowed), stage-change audit logging, contacts + activities, follow-up dashboard shows only open dated tasks and drops completed ones, conversion creates a company / is idempotent / links an existing company / refuses a double-link / requires exactly one option.
+- Full regression: **347 passed** (was 334 on Day 29; +13, exactly the new file — no regressions, and nothing under `app/services/{project,procurement,inventory,finance}_service.py` or their routers was touched, confirmed by the diff).
+- `tsc --noEmit`: clean. Dev server was live and in active use again this session, so `next build` was skipped a second time in favor of `tsc` + hitting every new/changed route on the running dev server (all 200).
+- **Live end-to-end, not just tests**: created a real CRM organization, logged a dated follow-up task, confirmed it appeared in `/platform/crm/follow-ups`, converted it to a new company, and called convert again to confirm the idempotent `already_converted: true` response with the same `company_id` — all against the actual running dev backend and Postgres, not just the test suite.

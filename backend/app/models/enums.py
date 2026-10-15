@@ -127,3 +127,29 @@ class CompanyOnboardingStatus(str, enum.Enum):
 
     PENDING = "pending"
     APPROVED = "approved"
+
+
+class CrmPipelineType(str, enum.Enum):
+    """Which pipeline a CRM organization is being worked through (PLAT-011..015).
+    Both pipelines share one stage set (CrmStage) -- structurally similar sales
+    processes -- labelled differently per pipeline in the UI."""
+
+    SAAS_SALES = "saas_sales"
+    SUPPLIER_ACQUISITION = "supplier_acquisition"
+
+
+class CrmStage(str, enum.Enum):
+    NEW = "new"
+    CONTACTED = "contacted"
+    QUALIFIED = "qualified"
+    PROPOSAL = "proposal"
+    NEGOTIATION = "negotiation"
+    WON = "won"
+    LOST = "lost"
+
+
+class CrmActivityType(str, enum.Enum):
+    CALL = "call"
+    MEETING = "meeting"
+    NOTE = "note"
+    TASK = "task"  # a follow-up/reminder when due_at is set
