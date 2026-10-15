@@ -126,10 +126,15 @@ class MarketplaceProduct(TimestampedBase):
 
 
 class MarketplaceCompanySupplierLink(TimestampedBase):
-    """Groundwork for future integration (PLAT-020): records that a specific
-    tenant company has been connected to a marketplace supplier. Nothing reads
-    this yet to change RFQ/procurement behaviour -- it exists so that work can
-    build on real data instead of starting from nothing."""
+    """A tenant company connected to a marketplace supplier (PLAT-022). As of
+    migration 0026 this is read by the marketplace integration: `erp_supplier_id`
+    is the row in *that company's own* `suppliers` table that RFQs/quotations
+    actually reference (RfqSupplier/Quotation FK the tenant Supplier, never a
+    MarketplaceSupplier directly) -- either linked to an existing one or created
+    fresh through the existing `supplier_service.create_supplier`, never a new
+    supplier system. Either a platform staff member or the company's own user
+    can create the connection; exactly one of `linked_by_id`/`linked_by_user_id`
+    is set."""
 
     __tablename__ = "marketplace_company_supplier_links"
     __table_args__ = (UniqueConstraint("company_id", "marketplace_supplier_id", name="uq_company_marketplace_supplier"),)
@@ -138,7 +143,13 @@ class MarketplaceCompanySupplierLink(TimestampedBase):
     marketplace_supplier_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("marketplace_suppliers.id"), index=True, nullable=False
     )
-    linked_by_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_admins.id"), nullable=False)
+    erp_supplier_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=True
+    )
+    is_preferred: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
+    linked_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_admins.id"), nullable=True)
+    linked_by_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
@@ -159,3 +170,46 @@ class MarketplaceMaterialMapping(TimestampedBase):
         UUID(as_uuid=True), ForeignKey("marketplace_products.id"), index=True, nullable=False
     )
     mapped_by_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_admins.id"), nullable=False)
+
+
+class MarketplaceRfqInvitation(TimestampedBase):
+    """A marketplace supplier invited to quote on a company's existing ERP RFQ
+    (PLAT-023). This never replaces RfqSupplier -- inviting a connected
+    marketplace supplier also creates the normal RfqSupplier row through the
+    existing rfq flow, using the link's erp_supplier_id. This table is purely
+    the marketplace-side invitation record and status tracker. The unique
+    constraint is what actually prevents a duplicate invitation, not just an
+    application-level check."""
+
+    __tablename__ = "marketplace_rfq_invitations"
+    __table_args__ = (UniqueConstraint("rfq_id", "marketplace_supplier_id", name="uq_rfq_marketplace_supplier"),)
+
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), index=True, nullable=False)
+    rfq_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("rfqs.id"), index=True, nullable=False)
+    marketplace_supplier_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("marketplace_suppliers.id"), index=True, nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(20), default="invited", nullable=False)  # invited, quoted, declined
+    invited_by_staff_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_admins.id"), nullable=True)
+    invited_by_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+
+
+class MarketplaceDeliveryReport(TimestampedBase):
+    """A supplier-claimed delivery event against a real ERP purchase order
+    (PLAT-026). Deliberately inert: recording one never touches
+    InventoryTransaction or PurchaseOrderItem.quantity_received -- actual stock
+    only ever moves through the existing procurement_service.create_goods_receipt.
+    `external_reference` makes reporting idempotent: reporting the same event
+    twice (e.g. a retried webhook) returns the existing row instead of a
+    duplicate."""
+
+    __tablename__ = "marketplace_delivery_reports"
+    __table_args__ = (UniqueConstraint("purchase_order_id", "external_reference", name="uq_delivery_report_reference"),)
+
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), index=True, nullable=False)
+    purchase_order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("purchase_orders.id"), index=True, nullable=False
+    )
+    external_reference: Mapped[str] = mapped_column(String(100), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    reported_by_staff_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_admins.id"), nullable=False)

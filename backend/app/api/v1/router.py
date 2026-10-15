@@ -13,6 +13,7 @@ from app.api.v1 import (
     forecast,
     health,
     inventory,
+    marketplace,
     materials,
     milestones,
     notifications,
@@ -64,6 +65,7 @@ api_router.include_router(documents.router)
 api_router.include_router(schedule.router)
 api_router.include_router(notifications.router)
 api_router.include_router(search.router)
+api_router.include_router(marketplace.router)
 api_router.include_router(platform.router)
 api_router.include_router(platform_crm.router)
 api_router.include_router(platform_marketplace.router)

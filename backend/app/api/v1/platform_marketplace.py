@@ -28,8 +28,17 @@ from app.schemas.marketplace_supplier import (
     MarketplaceSupplierUpdate,
     MarketplaceVerificationUpdate,
 )
+from app.schemas.marketplace_integration import (
+    DeliveryReportCreate,
+    DeliveryReportRead,
+    InviteSuppliersRequest,
+    MarketplaceInvitationRead,
+    MarketplaceOrderStatus,
+    SupplierMatch,
+)
 from app.schemas.platform import PlatformAuditEntry
-from app.services import marketplace_supplier_service
+from app.schemas.rfq import QuotationCreate, RfqRead
+from app.services import marketplace_integration_service, marketplace_supplier_service, rfq_service
 
 router = APIRouter(prefix="/platform/marketplace", tags=["platform-marketplace"])
 
@@ -167,3 +176,78 @@ def create_material_mapping(
     admin: PlatformAdmin = Depends(_can_edit),
 ) -> MarketplaceMaterialMappingRead:
     return marketplace_supplier_service.create_material_mapping(db, admin, payload)
+
+
+# ---- PLAT-023/024/026: platform staff assisting a specific company ----------------------
+# Every endpoint below takes company_id explicitly, since platform staff aren't
+# scoped to one tenant -- but every call still goes through the same tenant-
+# isolated service functions (rfq_service.get_rfq, procurement_service.get_
+# purchase_order) that company users themselves go through, so a staff member
+# can't be tricked into leaking one company's RFQ into another's view either.
+
+
+@router.post("/companies/{company_id}/rfqs/{rfq_id}/invite-suppliers", response_model=list[MarketplaceInvitationRead], status_code=201)
+def assist_invite_suppliers(
+    company_id: uuid.UUID,
+    rfq_id: uuid.UUID,
+    payload: InviteSuppliersRequest,
+    db: Session = Depends(get_db),
+    admin: PlatformAdmin = Depends(_can_edit),
+) -> list[MarketplaceInvitationRead]:
+    return marketplace_integration_service.invite_suppliers(
+        db, company_id, rfq_id, payload.marketplace_supplier_ids, actor_staff_id=admin.id
+    )
+
+
+@router.post(
+    "/companies/{company_id}/rfqs/{rfq_id}/suppliers/{marketplace_supplier_id}/quotations",
+    response_model=RfqRead,
+    status_code=201,
+)
+def assist_record_quotation(
+    company_id: uuid.UUID,
+    rfq_id: uuid.UUID,
+    marketplace_supplier_id: uuid.UUID,
+    payload: QuotationCreate,
+    db: Session = Depends(get_db),
+    admin: PlatformAdmin = Depends(_can_edit),
+) -> RfqRead:
+    rfq = marketplace_integration_service.record_quotation_for_marketplace_supplier(
+        db, admin.id, company_id, rfq_id, marketplace_supplier_id, payload
+    )
+    return rfq_service.to_read(db, company_id, rfq)
+
+
+@router.get("/companies/{company_id}/purchase-orders/{po_id}/status", response_model=MarketplaceOrderStatus)
+def order_status(
+    company_id: uuid.UUID,
+    po_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _admin: PlatformAdmin = Depends(get_current_platform_admin),
+) -> MarketplaceOrderStatus:
+    return marketplace_integration_service.get_order_status(db, company_id, po_id)
+
+
+@router.post("/companies/{company_id}/purchase-orders/{po_id}/delivery-reports", response_model=DeliveryReportRead, status_code=201)
+def report_delivery(
+    company_id: uuid.UUID,
+    po_id: uuid.UUID,
+    payload: DeliveryReportCreate,
+    db: Session = Depends(get_db),
+    admin: PlatformAdmin = Depends(_can_edit),
+) -> DeliveryReportRead:
+    return marketplace_integration_service.report_delivery(db, admin.id, company_id, po_id, payload)
+
+
+# ---- PLAT-027: deterministic supplier matching -------------------------------------------
+
+
+@router.get("/companies/{company_id}/match", response_model=list[SupplierMatch])
+def find_eligible_suppliers(
+    company_id: uuid.UUID,
+    material_id: uuid.UUID,
+    area: str | None = None,
+    db: Session = Depends(get_db),
+    _admin: PlatformAdmin = Depends(get_current_platform_admin),
+) -> list[SupplierMatch]:
+    return marketplace_integration_service.find_eligible_suppliers(db, company_id, material_id, area)

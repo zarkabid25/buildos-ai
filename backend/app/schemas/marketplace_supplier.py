@@ -149,7 +149,11 @@ class MarketplaceCompanyLinkRead(BaseModel):
     company_id: uuid.UUID
     company_name: str | None = None
     marketplace_supplier_id: uuid.UUID
-    linked_by_id: uuid.UUID
+    erp_supplier_id: uuid.UUID | None = None
+    is_preferred: bool = False
+    status: str = "active"
+    linked_by_id: uuid.UUID | None
+    linked_by_user_id: uuid.UUID | None = None
     notes: str | None
     created_at: datetime
 
