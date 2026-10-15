@@ -19,6 +19,7 @@ from app.api.v1 import (
     payments,
     platform,
     platform_crm,
+    platform_marketplace,
     procurement,
     project_members,
     projects,
@@ -65,3 +66,4 @@ api_router.include_router(notifications.router)
 api_router.include_router(search.router)
 api_router.include_router(platform.router)
 api_router.include_router(platform_crm.router)
+api_router.include_router(platform_marketplace.router)

@@ -858,3 +858,34 @@ Two paths, exactly one per call: `create_company_name`/`create_company_code` mak
 - Full regression: **347 passed** (was 334 on Day 29; +13, exactly the new file — no regressions, and nothing under `app/services/{project,procurement,inventory,finance}_service.py` or their routers was touched, confirmed by the diff).
 - `tsc --noEmit`: clean. Dev server was live and in active use again this session, so `next build` was skipped a second time in favor of `tsc` + hitting every new/changed route on the running dev server (all 200).
 - **Live end-to-end, not just tests**: created a real CRM organization, logged a dated follow-up task, confirmed it appeared in `/platform/crm/follow-ups`, converted it to a new company, and called convert again to confirm the idempotent `already_converted: true` response with the same `company_id` — all against the actual running dev backend and Postgres, not just the test suite.
+
+---
+
+## Day 31 — 2026-10-15 — Supplier Network: marketplace registry, verification, catalog (PLAT-016..020)
+
+Zark asked for BuildOS AI 2.0 Phase 3 (PLAT-016..020): a global marketplace supplier registry, admin-led onboarding, verification workflow, product catalog, search/filtering, activity history, and groundwork tables for future integration -- explicitly without replacing the existing per-company `Supplier` model, without merging suppliers by name, and without supplier login accounts yet.
+
+### Keeping the two supplier concepts genuinely separate
+This was the central risk flagged in the Day 28 audit, and it's why `MarketplaceSupplier` is a wholly new model (`app/models/marketplace_supplier.py`), not an extension of `app/models/supplier.py`. Verified, not just asserted: `app/services/supplier_service.py`, `app/api/v1/suppliers.py` and `app/models/supplier.py` were never opened this session, the existing `test_supplier_history_http.py` suite (5 tests) passes unchanged, and a new test proves a marketplace supplier never shows up in a tenant's own `/api/v1/suppliers` list.
+
+### The model
+`MarketplaceSupplier` (no `company_id` -- cross-tenant by design, like `PlatformAdmin`), `MarketplaceSupplierContact`, `MarketplaceSupplierDocument` (verification files, same storage backend as tenant documents in `app/core/storage.py`, just namespaced by supplier id instead of company id), `MarketplaceSupplierCategory` / `MarketplaceSupplierCoverageArea` (free-text tag tables, not enums -- the marketplace's category vocabulary isn't fixed yet), and `MarketplaceProduct` (price, minimum order quantity, lead time). Two tables are pure groundwork per the explicit ask: `MarketplaceCompanySupplierLink` (a company connected to a marketplace supplier) and `MarketplaceMaterialMapping` (a tenant's own `Material` matched to a marketplace catalog product) -- nothing in procurement reads either yet; they exist so later work has real data to build on, documented as such in the model docstrings so nobody mistakes them for live integration.
+
+### Verification workflow
+A real state machine (`_ALLOWED_TRANSITIONS` in `marketplace_supplier_service.py`), not just a free-form status field: pending → verified or rejected; verified → suspended or rejected; suspended → verified; rejected → pending (reconsideration). A same-status or disallowed jump (e.g. pending straight to suspended) is refused with a 400, not silently accepted. Every transition is audit-logged with an optional reason.
+
+### Never auto-merge by name
+Creating a supplier with a name that case-insensitively matches an existing one still creates a separate record -- always. The response carries a `possible_duplicates` list so staff can review and decide by hand; nothing is ever silently combined. Verified directly: created "Steel Traders Co" then "steel traders co", got two distinct ids back, and the second response flagged the first as a possible duplicate.
+
+### Usable before any supplier login exists
+Everything (contacts, documents, catalog, verification) is entered and managed by platform staff, same as tenant staff enter RFQ quotations on a supplier's behalf today. No supplier-facing auth was built here -- that's explicitly Portal 3's own future phase, consistent with what the Day 28 audit recommended.
+
+### Verified
+- New tests: `tests/test_platform_marketplace_http.py` (14) -- existing tenant supplier CRUD unaffected, marketplace suppliers don't leak into `/api/v1/suppliers`, support-role view-only boundary, duplicate-name flagging (not merging), verification state machine (valid transitions, no-op refused, pending→suspended skip refused), verification change audit-logged and visible in both the supplier's own activity feed and the global platform audit log, contacts, document upload/download (round-tripped real PDF bytes through storage and back), product catalog add/update, search/filter by category and coverage area, company-link creation + duplicate-link refusal, material-mapping creation + duplicate refusal.
+- Full regression: **361 passed** (was 347 on Day 30; +14, exactly the new file -- no regressions).
+- Migration **0025**, purely additive (8 new tables, no changes to any existing table). Applied to the dev Postgres (0024 → 0025) and drift-checked clean on the first attempt (this time the model's `index=True` columns were written to match the migration's explicit indexes from the start, after Day 30's drift-check catching the same class of miss twice already).
+- `tsc --noEmit` clean. Dev server live and in active use again, so verified via `tsc` plus hitting every new/changed route on the running dev server (all 200), same approach as Days 29-30.
+- **Live end-to-end**: created a real marketplace supplier against the running dev backend and Postgres, confirmed it in the actual database.
+
+### Frontend
+`/platform-admin/marketplace` (search, status filter, create form) and `/platform-admin/marketplace/[id]` (verification actions gated to the allowed next states, contacts, document upload/download, product catalog, connected-companies linking, activity history). No dedicated screen for material mappings -- that table has no consuming feature yet, so a UI for it would be decoration; the API exists and is tested, ready for whenever BUILD-148-style integration actually needs it.

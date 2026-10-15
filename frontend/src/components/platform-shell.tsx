@@ -2,19 +2,20 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Building2, CalendarClock, LayoutGrid, ListChecks, Menu, Search, Users2, Users, X } from "lucide-react";
+import { Building2, CalendarClock, LayoutGrid, ListChecks, Menu, Search, Truck, Users2, Users, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
 import { cn } from "@/lib/utils";
 
-// Only destinations that actually exist. Epic 27's remaining items (Suppliers,
-// RFQs, Commissions, Revenue Reports...) all need backend that isn't built yet
-// -- see docs/tickets.md -- so they aren't shown as dead links here.
+// Only destinations that actually exist. Epic 27's remaining items (RFQs,
+// Commissions, Revenue Reports...) all need backend that isn't built yet -- see
+// docs/tickets.md -- so they aren't shown as dead links here.
 const NAV_ITEMS = [
   { label: "Overview", href: "/platform-admin/dashboard", icon: LayoutGrid },
   { label: "Companies", href: "/platform-admin/companies", icon: Building2 },
   { label: "CRM", href: "/platform-admin/crm", icon: Users2 },
   { label: "Follow-ups", href: "/platform-admin/crm/follow-ups", icon: CalendarClock },
+  { label: "Marketplace", href: "/platform-admin/marketplace", icon: Truck },
   { label: "Staff", href: "/platform-admin/staff", icon: Users },
   { label: "Audit Log", href: "/platform-admin/audit", icon: ListChecks },
 ];

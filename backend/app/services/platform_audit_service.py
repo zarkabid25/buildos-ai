@@ -31,14 +31,20 @@ def record(
     )
 
 
-def list_entries(db: Session, limit: int = 100) -> list[PlatformAuditEntry]:
-    rows = (
-        db.query(PlatformAuditLog, PlatformAdmin.full_name)
-        .outerjoin(PlatformAdmin, PlatformAdmin.id == PlatformAuditLog.actor_id)
-        .order_by(PlatformAuditLog.created_at.desc())
-        .limit(limit)
-        .all()
+def list_entries(
+    db: Session,
+    limit: int = 100,
+    entity_type: str | None = None,
+    entity_id: uuid.UUID | None = None,
+) -> list[PlatformAuditEntry]:
+    query = db.query(PlatformAuditLog, PlatformAdmin.full_name).outerjoin(
+        PlatformAdmin, PlatformAdmin.id == PlatformAuditLog.actor_id
     )
+    if entity_type:
+        query = query.filter(PlatformAuditLog.entity_type == entity_type)
+    if entity_id:
+        query = query.filter(PlatformAuditLog.entity_id == entity_id)
+    rows = query.order_by(PlatformAuditLog.created_at.desc()).limit(limit).all()
     return [
         PlatformAuditEntry(
             id=entry.id,

@@ -153,3 +153,14 @@ class CrmActivityType(str, enum.Enum):
     MEETING = "meeting"
     NOTE = "note"
     TASK = "task"  # a follow-up/reminder when due_at is set
+
+
+class MarketplaceSupplierStatus(str, enum.Enum):
+    """Verification workflow (PLAT-018). PENDING -> VERIFIED or REJECTED;
+    VERIFIED -> SUSPENDED -> VERIFIED (reactivated). Transitions are enforced
+    in the service layer, not the database."""
+
+    PENDING = "pending"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+    SUSPENDED = "suspended"
