@@ -35,10 +35,11 @@ from app.schemas.marketplace_integration import (
     InviteSuppliersRequest,
     MarketplaceInvitationRead,
     MarketplaceOrderStatus,
+    QuotationAttributionRead,
     SupplierMatch,
 )
 from app.schemas.platform import PlatformAuditEntry
-from app.schemas.rfq import RfqRead
+from app.schemas.rfq import RfqRead, RfqSummary
 from app.services import marketplace_integration_service, marketplace_supplier_service, rfq_service
 
 router = APIRouter(prefix="/platform/marketplace", tags=["platform-marketplace"])
@@ -252,3 +253,36 @@ def find_eligible_suppliers(
     _admin: PlatformAdmin = Depends(get_current_platform_admin),
 ) -> list[SupplierMatch]:
     return marketplace_integration_service.find_eligible_suppliers(db, company_id, material_id, area)
+
+
+# ---- Quotation attribution (Phase 4.1 Task 3) ---------------------------------------------
+
+
+@router.get("/companies/{company_id}/rfqs/{rfq_id}/quotation-attributions", response_model=list[QuotationAttributionRead])
+def quotation_attributions(
+    company_id: uuid.UUID,
+    rfq_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _admin: PlatformAdmin = Depends(get_current_platform_admin),
+) -> list[QuotationAttributionRead]:
+    return marketplace_integration_service.get_quotation_attributions(db, company_id, rfq_id)
+
+
+# ---- RFQ passthroughs for the matching UI (Task 2) -- pure reuse, no new RFQ logic --------
+
+
+@router.get("/companies/{company_id}/rfqs", response_model=list[RfqSummary])
+def list_company_rfqs(
+    company_id: uuid.UUID, db: Session = Depends(get_db), _admin: PlatformAdmin = Depends(get_current_platform_admin)
+) -> list[RfqSummary]:
+    return rfq_service.list_rfqs(db, company_id)
+
+
+@router.get("/companies/{company_id}/rfqs/{rfq_id}", response_model=RfqRead)
+def get_company_rfq(
+    company_id: uuid.UUID,
+    rfq_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _admin: PlatformAdmin = Depends(get_current_platform_admin),
+) -> RfqRead:
+    return rfq_service.to_read(db, company_id, rfq_service.get_rfq(db, company_id, rfq_id))

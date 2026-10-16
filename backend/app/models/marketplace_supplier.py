@@ -213,3 +213,27 @@ class MarketplaceDeliveryReport(TimestampedBase):
     external_reference: Mapped[str] = mapped_column(String(100), nullable=False)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     reported_by_staff_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_admins.id"), nullable=False)
+
+
+class MarketplaceQuotationAttribution(TimestampedBase):
+    """The true record of who actually entered a quotation on a marketplace
+    supplier's behalf (Phase 4.1 Task 3). Quotation.created_by_id is never
+    changed or reused for this -- it FKs to users.id and platform staff
+    deliberately aren't tenant users, so it correctly keeps recording the
+    RFQ's own creator as the ERP's "created by". This table is the separate,
+    additive, insert-only record of the real actor: one row per submission
+    event (a re-quote by staff adds a new row rather than editing the old
+    one, so the history of who submitted what and when is never lost, even
+    though the underlying Quotation row itself gets replaced on re-entry)."""
+
+    __tablename__ = "marketplace_quotation_attributions"
+
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), index=True, nullable=False)
+    rfq_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("rfqs.id"), index=True, nullable=False)
+    quotation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("quotations.id"), index=True, nullable=False)
+    marketplace_supplier_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("marketplace_suppliers.id"), index=True, nullable=False
+    )
+    submitted_by_staff_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_admins.id"), nullable=False)
+    method: Mapped[str] = mapped_column(String(50), default="platform_staff_assisted", nullable=False)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)

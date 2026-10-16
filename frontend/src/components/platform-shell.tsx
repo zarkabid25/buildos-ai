@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Building2, CalendarClock, LayoutGrid, ListChecks, Menu, Search, Truck, Users2, Users, X } from "lucide-react";
+import { Building2, CalendarClock, LayoutGrid, ListChecks, Menu, Search, Target, Truck, Users2, Users, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { label: "CRM", href: "/platform-admin/crm", icon: Users2 },
   { label: "Follow-ups", href: "/platform-admin/crm/follow-ups", icon: CalendarClock },
   { label: "Marketplace", href: "/platform-admin/marketplace", icon: Truck },
+  { label: "Supplier Matching", href: "/platform-admin/marketplace/match", icon: Target },
   { label: "Staff", href: "/platform-admin/staff", icon: Users },
   { label: "Audit Log", href: "/platform-admin/audit", icon: ListChecks },
 ];
@@ -74,10 +75,13 @@ export function PlatformShell({ children, breadcrumb }: { children: ReactNode; b
         <nav className="flex-1 space-y-1 px-3">
           <div className="px-2 pb-1 text-xs font-medium text-[var(--bo-text-muted)]">Workspace</div>
           {NAV_ITEMS.map((item) => {
+            // Sibling routes nested under another nav item's own href (e.g.
+            // /crm/follow-ups, /marketplace/match) get their own nav entry, so
+            // they must not also light up their parent's.
+            const siblingPrefixes = ["/platform-admin/crm/follow-ups", "/platform-admin/marketplace/match"];
             const active =
-              item.href === "/platform-admin/crm"
-                ? pathname === item.href || (pathname.startsWith(item.href) && !pathname.startsWith("/platform-admin/crm/follow-ups"))
-                : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              pathname === item.href ||
+              (pathname.startsWith(`${item.href}/`) && !siblingPrefixes.some((p) => pathname.startsWith(p) && p !== item.href));
             const Icon = item.icon;
             return (
               <Link

@@ -12,18 +12,21 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.models.company import Company
 from app.models.enums import MarketplaceSupplierStatus, RfqStatus
 from app.models.marketplace_supplier import (
     MarketplaceCompanySupplierLink,
     MarketplaceDeliveryReport,
     MarketplaceMaterialMapping,
     MarketplaceProduct,
+    MarketplaceQuotationAttribution,
     MarketplaceRfqInvitation,
     MarketplaceSupplier,
     MarketplaceSupplierCategory,
     MarketplaceSupplierCoverageArea,
 )
 from app.models.material import MaterialCategory
+from app.models.platform_admin import PlatformAdmin
 from app.models.procurement import GoodsReceipt
 from app.models.rfq import Rfq, RfqSupplier
 from app.schemas.marketplace_integration import (
@@ -37,6 +40,7 @@ from app.schemas.marketplace_integration import (
     DiscoverySupplierRead,
     MarketplaceInvitationRead,
     MarketplaceOrderStatus,
+    QuotationAttributionRead,
     SupplierMatch,
     UpdateConnectionRequest,
 )
@@ -44,6 +48,18 @@ from app.schemas.rfq import QuotationCreate
 from app.schemas.supplier import SupplierCreate
 from app.services import audit_service, platform_audit_service, procurement_service, rfq_service, supplier_service
 from app.services.material_service import get_material
+
+
+def ensure_marketplace_enabled(db: Session, company_id: uuid.UUID) -> None:
+    """The single choke point every marketplace *action* (never a read of
+    already-existing historical data) passes through. Disabled by default per
+    company (Phase 4.1 Task 4); a future subscription/entitlement check can be
+    added here without touching any call site."""
+    enabled = db.query(Company.marketplace_enabled).filter(Company.id == company_id).scalar()
+    if enabled is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Company not found")
+    if not enabled:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "The marketplace isn't enabled for this company yet")
 
 
 def _get_marketplace_supplier(db: Session, marketplace_supplier_id: uuid.UUID) -> MarketplaceSupplier:
@@ -79,6 +95,7 @@ def _connections_for_company(db: Session, company_id: uuid.UUID) -> dict[uuid.UU
 def discover_suppliers(
     db: Session, company_id: uuid.UUID, search: str | None = None, category: str | None = None, area: str | None = None
 ) -> list[DiscoverySupplierRead]:
+    ensure_marketplace_enabled(db, company_id)
     query = db.query(MarketplaceSupplier).filter(MarketplaceSupplier.verification_status == MarketplaceSupplierStatus.VERIFIED)
     if search:
         query = query.filter(MarketplaceSupplier.name.ilike(f"%{search.strip()}%"))
@@ -112,6 +129,7 @@ def discover_suppliers(
 
 
 def get_supplier_detail(db: Session, company_id: uuid.UUID, marketplace_supplier_id: uuid.UUID) -> DiscoverySupplierDetail:
+    ensure_marketplace_enabled(db, company_id)
     supplier = _get_marketplace_supplier(db, marketplace_supplier_id)
     if supplier.verification_status != MarketplaceSupplierStatus.VERIFIED:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Marketplace supplier not found")
@@ -148,6 +166,7 @@ def connect_supplier(
     actor_user_id: uuid.UUID | None = None,
     actor_staff_id: uuid.UUID | None = None,
 ) -> CompanySupplierConnectionRead:
+    ensure_marketplace_enabled(db, company_id)
     mkt_supplier = _get_marketplace_supplier(db, marketplace_supplier_id)
     if mkt_supplier.verification_status != MarketplaceSupplierStatus.VERIFIED:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only a verified supplier can be connected")
@@ -248,6 +267,7 @@ def invite_suppliers(
     actor_user_id: uuid.UUID | None = None,
     actor_staff_id: uuid.UUID | None = None,
 ) -> list[MarketplaceInvitationRead]:
+    ensure_marketplace_enabled(db, company_id)
     # get_rfq enforces tenant isolation: a company can never invite marketplace
     # suppliers onto an RFQ it doesn't own, the same way every other RFQ action does.
     rfq = rfq_service.get_rfq(db, company_id, rfq_id)
@@ -355,10 +375,15 @@ def record_quotation_for_marketplace_supplier(
     payload: AssistedQuotationCreate,
 ) -> Rfq:
     """Platform staff entering a quotation on a connected marketplace supplier's
-    behalf. The ERP record of who created it is attributed to the RFQ's own
-    creator (a real tenant user) -- Quotation.created_by_id FKs to users.id, and
-    platform staff deliberately aren't in that table (see PlatformAdmin's own
-    docstring). The platform audit log is where the real actor is recorded."""
+    behalf. Quotation.created_by_id is never repurposed for this: it keeps
+    correctly recording the RFQ's own creator (a real tenant user), since
+    platform staff deliberately aren't in the users table (see PlatformAdmin's
+    own docstring) and that FK's existing meaning/behaviour is left untouched.
+    The real actor, the supplier represented, the resulting quotation id, and
+    the submission time are instead recorded in a separate, additive,
+    insert-only MarketplaceQuotationAttribution row -- the immutable audit
+    trail for "who actually typed this in." See get_quotation_attributions."""
+    ensure_marketplace_enabled(db, company_id)
     rfq = rfq_service.get_rfq(db, company_id, rfq_id)
     link = (
         db.query(MarketplaceCompanySupplierLink)
@@ -372,12 +397,55 @@ def record_quotation_for_marketplace_supplier(
     result = rfq_service.record_quotation(db, company_id, rfq.created_by_id, rfq_id, quotation_payload)
     mark_invitation_quoted(db, company_id, rfq_id, link.erp_supplier_id)
     mkt_supplier = _get_marketplace_supplier(db, marketplace_supplier_id)
+
+    quotation = next(q for q in result.quotations if q.supplier_id == link.erp_supplier_id)
+    total = sum((qi.rate * next(i.quantity for i in result.items if i.id == qi.rfq_item_id) for qi in quotation.items), Decimal("0"))
+    db.add(
+        MarketplaceQuotationAttribution(
+            company_id=company_id,
+            rfq_id=rfq_id,
+            quotation_id=quotation.id,
+            marketplace_supplier_id=marketplace_supplier_id,
+            submitted_by_staff_id=actor_staff_id,
+            total_amount=total.quantize(Decimal("0.01")),
+        )
+    )
     platform_audit_service.record(
         db, actor_staff_id, "marketplace_supplier.quotation_recorded", "rfq", rfq_id,
         f"Recorded a quotation from {mkt_supplier.name} on {rfq.rfq_number} (on their behalf)",
+        {"quotation_id": str(quotation.id), "total": str(total.quantize(Decimal('0.01')))},
     )
     db.commit()
     return result
+
+
+def get_quotation_attributions(db: Session, company_id: uuid.UUID, rfq_id: uuid.UUID) -> list[QuotationAttributionRead]:
+    """Every platform-staff-assisted submission on this RFQ, in order -- the
+    honest record of who actually entered each quotation, separate from
+    (and never overriding) Quotation.created_by_id."""
+    rfq_service.get_rfq(db, company_id, rfq_id)  # isolation
+    rows = (
+        db.query(MarketplaceQuotationAttribution, MarketplaceSupplier.name, PlatformAdmin.full_name)
+        .join(MarketplaceSupplier, MarketplaceSupplier.id == MarketplaceQuotationAttribution.marketplace_supplier_id)
+        .join(PlatformAdmin, PlatformAdmin.id == MarketplaceQuotationAttribution.submitted_by_staff_id)
+        .filter(MarketplaceQuotationAttribution.rfq_id == rfq_id)
+        .order_by(MarketplaceQuotationAttribution.created_at.desc())
+        .all()
+    )
+    return [
+        QuotationAttributionRead(
+            id=a.id,
+            quotation_id=a.quotation_id,
+            marketplace_supplier_id=a.marketplace_supplier_id,
+            marketplace_supplier_name=supplier_name,
+            submitted_by_staff_id=a.submitted_by_staff_id,
+            submitted_by_staff_name=staff_name,
+            method=a.method,
+            total_amount=a.total_amount,
+            created_at=a.created_at,
+        )
+        for a, supplier_name, staff_name in rows
+    ]
 
 
 # ---- PLAT-025/026: real PO status, idempotent delivery reporting ----------------------

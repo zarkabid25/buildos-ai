@@ -34,3 +34,26 @@ export interface CompanySupplierConnection {
   notes: string | null;
   created_at: string;
 }
+
+export interface MarketplaceInvitation {
+  id: string;
+  rfq_id: string;
+  marketplace_supplier_id: string;
+  marketplace_supplier_name: string | null;
+  status: string;
+  invited_by_staff_id: string | null;
+  invited_by_user_id: string | null;
+  created_at: string;
+}
+
+export interface QuotationAttribution {
+  id: string;
+  quotation_id: string;
+  marketplace_supplier_id: string;
+  marketplace_supplier_name: string;
+  submitted_by_staff_id: string;
+  submitted_by_staff_name: string;
+  method: string;
+  total_amount: string;
+  created_at: string;
+}

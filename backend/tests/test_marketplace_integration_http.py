@@ -21,6 +21,17 @@ def owner_headers(client, email="mkt-int-owner@buildos.ai"):
     return platform_login(client, email=email, role=PlatformStaffRole.OWNER)
 
 
+def enable_marketplace(client, staff_headers, tenant_headers):
+    """The marketplace is disabled by default for every company (Phase 4.1
+    Task 4); tests that exercise marketplace actions turn it on explicitly,
+    which also doubles as live proof the gate works (see
+    test_marketplace_disabled_by_default_blocks_actions below)."""
+    company_id = client.get("/api/v1/auth/me", headers=tenant_headers).json()["company_id"]
+    res = client.post(f"/api/v1/platform/companies/{company_id}/marketplace", json={"enabled": True}, headers=staff_headers)
+    assert res.status_code == 200, res.text
+    return company_id
+
+
 def make_verified_supplier(client, staff_headers, name="Global Cement Ltd", categories=None, areas=None):
     res = client.post(
         "/api/v1/platform/marketplace/suppliers",
@@ -59,7 +70,7 @@ def test_complete_flow_company_rfq_to_marketplace_to_inventory(client, auth_a, s
     staff = owner_headers(client)
     mkt_supplier = make_verified_supplier(client, staff, name="Flow Cement Co")
 
-    company_id = client.get("/api/v1/auth/me", headers=auth_a).json()["company_id"]
+    company_id = enable_marketplace(client, staff, auth_a)
 
     # 1. Company connects to the marketplace supplier, creating a real ERP Supplier
     #    through the existing supplier_service (not a parallel system).
@@ -171,6 +182,8 @@ def test_complete_flow_company_rfq_to_marketplace_to_inventory(client, auth_a, s
 def test_company_a_cannot_access_company_b_marketplace_data(client, auth_a, auth_b, s):
     staff = owner_headers(client, email="iso-staff@buildos.ai")
     mkt_supplier = make_verified_supplier(client, staff, name="Isolation Supplier")
+    enable_marketplace(client, staff, auth_a)
+    enable_marketplace(client, staff, auth_b)
 
     client.post(
         f"/api/v1/marketplace/suppliers/{mkt_supplier['id']}/connect",
@@ -216,6 +229,7 @@ def test_platform_staff_match_and_status_are_scoped_to_the_given_company(client,
 def test_suspended_supplier_cannot_receive_new_invitations(client, auth_a, s):
     staff = owner_headers(client, email="suspend-staff@buildos.ai")
     mkt_supplier = make_verified_supplier(client, staff, name="Soon Suspended Co")
+    enable_marketplace(client, staff, auth_a)
     client.post(f"/api/v1/marketplace/suppliers/{mkt_supplier['id']}/connect", json={"create_new_erp_supplier": True}, headers=auth_a)
     client.post(f"/api/v1/platform/marketplace/suppliers/{mkt_supplier['id']}/verification", json={"status": "suspended"}, headers=staff)
 
@@ -231,6 +245,7 @@ def test_suspended_supplier_cannot_receive_new_invitations(client, auth_a, s):
 def test_duplicate_invitations_are_rejected(client, auth_a, s):
     staff = owner_headers(client, email="dup-invite-staff@buildos.ai")
     mkt_supplier = make_verified_supplier(client, staff, name="Dup Invite Co")
+    enable_marketplace(client, staff, auth_a)
     client.post(f"/api/v1/marketplace/suppliers/{mkt_supplier['id']}/connect", json={"create_new_erp_supplier": True}, headers=auth_a)
     rfq = make(client, auth_a, "/rfqs", {"title": "RFQ", "items": [{"material_id": s["cement"]["id"], "quantity": "10"}]})
 
@@ -243,6 +258,7 @@ def test_duplicate_invitations_are_rejected(client, auth_a, s):
 def test_duplicate_connection_is_rejected(client, auth_a):
     staff = owner_headers(client, email="dup-connect-staff@buildos.ai")
     mkt_supplier = make_verified_supplier(client, staff, name="Dup Connect Co")
+    enable_marketplace(client, staff, auth_a)
     res1 = client.post(f"/api/v1/marketplace/suppliers/{mkt_supplier['id']}/connect", json={"create_new_erp_supplier": True}, headers=auth_a)
     assert res1.status_code == 201
     res2 = client.post(f"/api/v1/marketplace/suppliers/{mkt_supplier['id']}/connect", json={"create_new_erp_supplier": True}, headers=auth_a)
@@ -253,11 +269,11 @@ def test_duplicate_purchase_orders_are_prevented(client, auth_a, s):
     """Unchanged ERP behaviour: an RFQ can only be awarded once."""
     staff = owner_headers(client, email="dup-po-staff@buildos.ai")
     mkt_supplier = make_verified_supplier(client, staff, name="Dup PO Co")
+    company_id = enable_marketplace(client, staff, auth_a)
     client.post(f"/api/v1/marketplace/suppliers/{mkt_supplier['id']}/connect", json={"create_new_erp_supplier": True}, headers=auth_a)
     rfq = make(client, auth_a, "/rfqs", {"title": "RFQ", "items": [{"material_id": s["cement"]["id"], "quantity": "10"}]})
     client.post(f"/api/v1/marketplace/rfqs/{rfq['id']}/invite-suppliers", json={"marketplace_supplier_ids": [mkt_supplier["id"]]}, headers=auth_a)
 
-    company_id = client.get("/api/v1/auth/me", headers=auth_a).json()["company_id"]
     res = client.post(
         f"/api/v1/platform/marketplace/companies/{company_id}/rfqs/{rfq['id']}/suppliers/{mkt_supplier['id']}/quotations",
         json={"items": [{"rfq_item_id": rfq["items"][0]["id"], "rate": "100"}]},

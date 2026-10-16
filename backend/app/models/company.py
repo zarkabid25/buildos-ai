@@ -27,5 +27,12 @@ class Company(TimestampedBase):
         default=CompanyOnboardingStatus.PENDING,
         nullable=False,
     )
+    # Marketplace feature flag (PLAT-021..027 Phase 4.1 polish): disabled by
+    # default for every company, including pre-existing ones; only platform
+    # staff can turn it on. A single boolean today, but every marketplace
+    # action funnels through one choke point (marketplace_integration_service.
+    # ensure_marketplace_enabled), so a future subscription/entitlement check
+    # can be added there later without touching call sites.
+    marketplace_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     users: Mapped[list["User"]] = relationship(back_populates="company")  # noqa: F821

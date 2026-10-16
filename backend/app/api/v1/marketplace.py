@@ -3,9 +3,12 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from pydantic import BaseModel
+
 from app.api.deps import get_current_user, require_roles
 from app.api.v1.procurement import CAN_REQUEST
 from app.db.session import get_db
+from app.models.company import Company
 from app.models.user import User
 from app.schemas.marketplace_integration import (
     CompanySupplierConnectionRead,
@@ -15,11 +18,22 @@ from app.schemas.marketplace_integration import (
     InviteSuppliersRequest,
     MarketplaceInvitationRead,
     MarketplaceOrderStatus,
+    QuotationAttributionRead,
     UpdateConnectionRequest,
 )
 from app.services import marketplace_integration_service
 
 router = APIRouter(prefix="/marketplace", tags=["marketplace"])
+
+
+class MarketplaceStatus(BaseModel):
+    enabled: bool
+
+
+@router.get("/status", response_model=MarketplaceStatus)
+def marketplace_status(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> MarketplaceStatus:
+    enabled = db.query(Company.marketplace_enabled).filter(Company.id == current_user.company_id).scalar()
+    return MarketplaceStatus(enabled=bool(enabled))
 
 
 @router.get("/suppliers", response_model=list[DiscoverySupplierRead])
@@ -93,3 +107,10 @@ def order_status(
     po_id: uuid.UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> MarketplaceOrderStatus:
     return marketplace_integration_service.get_order_status(db, current_user.company_id, po_id)
+
+
+@router.get("/rfqs/{rfq_id}/quotation-attributions", response_model=list[QuotationAttributionRead])
+def quotation_attributions(
+    rfq_id: uuid.UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> list[QuotationAttributionRead]:
+    return marketplace_integration_service.get_quotation_attributions(db, current_user.company_id, rfq_id)

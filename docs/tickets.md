@@ -218,6 +218,12 @@ Per `docs/design-system.md` (BuildOS AI 2.0 global UI/UX instructions). A separa
 - [x] PLAT-026 Goods receipt synchronization (`marketplace_delivery_reports`: an idempotent, inert log of a supplier-claimed delivery; real stock only ever moves through the existing `procurement_service.create_goods_receipt`; a read-only marketplace order-status view derived from real PO/receipt data)
 - [x] PLAT-027 Platform-assisted supplier matching (deterministic: material-category match or an explicit `marketplace_material_mappings` row, verified suppliers only, real price/lead-time/min-qty — never a fabricated score)
 - [x] BUILD-148 Marketplace activity (superseded by PLAT-021..027 above; full two-way marketplace order sync still needs supplier-side login/portal, deliberately out of scope here)
+
+### Phase 4.1 — Marketplace Integration Polish
+- [x] Task 1: Marketplace RFQ UI (extends the existing `/rfqs` detail page: share with connected suppliers, invitation status table, quotation attribution shown inline in the comparison table — no redesign, same Card/Button/table conventions)
+- [x] Task 2: Platform Admin Matching UI (`/platform-admin/marketplace/match`: company → open RFQ → material → real matching suppliers with an Invite action; Linear/Attio/Stripe-styled per the platform admin theme)
+- [x] Task 3: Quotation audit attribution (`marketplace_quotation_attributions`, additive and insert-only; `Quotation.created_by_id` untouched and still correctly means "the RFQ's own creator"; a re-quote adds a new row rather than editing the old one)
+- [x] Task 4: Marketplace feature flag (`companies.marketplace_enabled`, disabled by default including every pre-existing company; owner/admin-only toggle; enforced server-side at every marketplace *action* endpoint; platform administration and historical records unaffected either way)
 - [ ] BUILD-149 Subscription management (needs a billing/plan model — no payment provider chosen yet)
 - [ ] BUILD-150 Commission tracking (needs the marketplace order model)
 - [ ] BUILD-151 Payments and invoices (platform-level, i.e. BuildOS billing its own customers — distinct from the existing tenant-level `payments` module)

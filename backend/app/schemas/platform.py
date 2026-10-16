@@ -46,6 +46,7 @@ class PlatformCompanyRead(BaseModel):
     is_active: bool
     suspended_at: datetime | None
     onboarding_status: CompanyOnboardingStatus
+    marketplace_enabled: bool
     created_at: datetime
     user_count: int
 
@@ -55,6 +56,10 @@ class PlatformCompanyRead(BaseModel):
 class PlatformCompanyList(BaseModel):
     total: int
     companies: list[PlatformCompanyRead]
+
+
+class MarketplaceFlagUpdate(BaseModel):
+    enabled: bool
 
 
 class PlatformDashboard(BaseModel):

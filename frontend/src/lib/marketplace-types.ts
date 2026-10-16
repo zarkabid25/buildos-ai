@@ -77,3 +77,46 @@ export interface MarketplaceCompanyLink {
   notes: string | null;
   created_at: string;
 }
+
+export interface CompanyRfqSummary {
+  id: string;
+  rfq_number: string;
+  title: string;
+  project_name: string | null;
+  status: "open" | "awarded" | "cancelled";
+  response_due: string | null;
+  item_count: number;
+  invited_count: number;
+  quotation_count: number;
+  lowest_total: string | null;
+  created_at: string;
+}
+
+export interface CompanyRfqItem {
+  id: string;
+  material_id: string;
+  material_name: string;
+  unit: string;
+  quantity: string;
+}
+
+export interface CompanyRfqDetail {
+  id: string;
+  rfq_number: string;
+  title: string;
+  status: "open" | "awarded" | "cancelled";
+  items: CompanyRfqItem[];
+}
+
+export interface SupplierMatch {
+  marketplace_supplier_id: string;
+  supplier_name: string;
+  verification_status: MarketplaceSupplierStatus;
+  product_id: string;
+  product_name: string;
+  price: string;
+  minimum_order_quantity: string;
+  lead_time_days: number | null;
+  coverage_areas: string[];
+  matched_via: "material_mapping" | "category";
+}

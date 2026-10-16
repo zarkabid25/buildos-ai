@@ -13,6 +13,13 @@ import { Label } from "@/components/ui/label";
 import { EmptyState, QueryView } from "@/components/ui/states";
 import { useAuth } from "@/lib/auth-context";
 import type { UserRole } from "@/lib/auth-types";
+import {
+  useInviteMarketplaceSuppliers,
+  useMarketplaceConnections,
+  useMarketplaceStatus,
+  useQuotationAttributions,
+  useRfqInvitations,
+} from "@/lib/use-marketplace-discovery";
 import type { Rfq, RfqStatus } from "@/lib/rfq-types";
 import { useMaterials } from "@/lib/use-inventory";
 import { useMaterialRequests } from "@/lib/use-procurement";
@@ -265,11 +272,98 @@ function RfqDetail({ rfqId, role }: { rfqId: string; role: UserRole }) {
       {(rfq) => (
         <div className="space-y-4">
           <RfqHeader rfq={rfq} canDecide={CAN_APPROVE.includes(role)} />
+          {rfq.status === "open" && CAN_REQUEST.includes(role) && <MarketplacePanel rfq={rfq} />}
           <Comparison rfq={rfq} canDecide={CAN_APPROVE.includes(role)} />
           {rfq.status === "open" && CAN_REQUEST.includes(role) && <QuoteForm rfq={rfq} />}
         </div>
       )}
     </QueryView>
+  );
+}
+
+// Extends the existing RFQ page without redesigning it: same Card/Button/table
+// conventions as everything else here. Shown only while the RFQ is open and
+// the viewer can request quotes -- the same gate as QuoteForm below.
+function MarketplacePanel({ rfq }: { rfq: Rfq }) {
+  const { data: status } = useMarketplaceStatus();
+  const { data: connections } = useMarketplaceConnections();
+  const { data: invitations, isLoading: invitationsLoading } = useRfqInvitations(rfq.id);
+  const invite = useInviteMarketplaceSuppliers(rfq.id);
+  const [selected, setSelected] = useState<string[]>([]);
+  const { toast } = useFeedback();
+
+  if (status && !status.enabled) return null; // disabled for this company -- don't clutter the RFQ page
+
+  const invitedIds = new Set((invitations ?? []).map((i) => i.marketplace_supplier_id));
+  const eligible = (connections ?? []).filter((c) => c.status === "active" && c.erp_supplier_id && !invitedIds.has(c.marketplace_supplier_id));
+
+  async function handleShare() {
+    if (selected.length === 0) return;
+    const saved = await attempt(invite.mutateAsync(selected));
+    if (saved) {
+      setSelected([]);
+      toast(`Shared with ${saved.length} marketplace supplier(s).`, "success");
+    }
+  }
+
+  return (
+    <Card className="space-y-3">
+      <h3 className="text-sm font-semibold text-ink">Marketplace suppliers</h3>
+
+      {eligible.length === 0 && (connections ?? []).length === 0 && (
+        <p className="text-sm text-muted">
+          No connected marketplace suppliers yet. Find and connect to one on the{" "}
+          <Link href="/marketplace" className="underline">
+            Supplier Marketplace
+          </Link>{" "}
+          page first.
+        </p>
+      )}
+      {eligible.length > 0 && (
+        <>
+          <p className="text-sm text-muted">Share this RFQ with connected marketplace suppliers to collect their quotes too.</p>
+          <div className="flex flex-wrap gap-3">
+            {eligible.map((c) => (
+              <label key={c.id} className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(c.marketplace_supplier_id)}
+                  onChange={(e) =>
+                    setSelected(e.target.checked ? [...selected, c.marketplace_supplier_id] : selected.filter((x) => x !== c.marketplace_supplier_id))
+                  }
+                />
+                {c.marketplace_supplier_name}
+                {c.is_preferred && <span className="text-xs text-primary">(preferred)</span>}
+              </label>
+            ))}
+          </div>
+          <Button variant="secondary" onClick={handleShare} disabled={selected.length === 0 || invite.isPending}>
+            {invite.isPending ? "Sharing..." : "Share RFQ with selected suppliers"}
+          </Button>
+        </>
+      )}
+
+      {!invitationsLoading && invitations && invitations.length > 0 && (
+        <div className="overflow-x-auto pt-2">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+                <th className="py-2 pr-4 font-medium">Marketplace supplier</th>
+                <th className="py-2 pr-4 font-medium">Invitation status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invitations.map((inv) => (
+                <tr key={inv.id} className="border-b border-border last:border-0">
+                  <td className="py-2 pr-4 text-ink">{inv.marketplace_supplier_name}</td>
+                  <td className="py-2 pr-4 capitalize text-muted">{inv.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -317,6 +411,11 @@ function RfqHeader({ rfq, canDecide }: { rfq: Rfq; canDecide: boolean }) {
 function Comparison({ rfq, canDecide }: { rfq: Rfq; canDecide: boolean }) {
   const award = useAwardRfq(rfq.id);
   const { confirm } = useFeedback();
+  // The honest record of who actually entered a quote on a marketplace
+  // supplier's behalf -- separate from (and never overriding) the RFQ's own
+  // created_by data, which keeps meaning what it always meant.
+  const { data: attributions } = useQuotationAttributions(rfq.id);
+  const attributionByQuotation = new Map((attributions ?? []).map((a) => [a.quotation_id, a]));
 
   if (rfq.quotations.length === 0) {
     return <EmptyState title="No quotes yet" hint="Enter each supplier's prices below as they come in." />;
@@ -341,12 +440,20 @@ function Comparison({ rfq, canDecide }: { rfq: Rfq; canDecide: boolean }) {
         <thead>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
             <th className="px-4 py-3 font-medium">Item</th>
-            {rfq.quotations.map((q) => (
-              <th key={q.id} className="px-4 py-3 font-medium">
-                {q.supplier_name}
-                {q.id === rfq.awarded_quotation_id && <span className="ml-1 normal-case text-success">(awarded)</span>}
-              </th>
-            ))}
+            {rfq.quotations.map((q) => {
+              const attribution = attributionByQuotation.get(q.id);
+              return (
+                <th key={q.id} className="px-4 py-3 font-medium">
+                  {q.supplier_name}
+                  {q.id === rfq.awarded_quotation_id && <span className="ml-1 normal-case text-success">(awarded)</span>}
+                  {attribution && (
+                    <div className="mt-0.5 text-xs font-normal normal-case text-muted">
+                      Entered by {attribution.submitted_by_staff_name} (BuildOS staff) on behalf of {attribution.marketplace_supplier_name}
+                    </div>
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>

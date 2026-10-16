@@ -156,3 +156,18 @@ class SupplierMatch(BaseModel):
     lead_time_days: int | None
     coverage_areas: list[str]
     matched_via: str  # "material_mapping" or "category"
+
+
+# ---- Phase 4.1 Task 3: immutable quotation attribution -----------------------------------
+
+
+class QuotationAttributionRead(BaseModel):
+    id: uuid.UUID
+    quotation_id: uuid.UUID
+    marketplace_supplier_id: uuid.UUID
+    marketplace_supplier_name: str
+    submitted_by_staff_id: uuid.UUID
+    submitted_by_staff_name: str
+    method: str
+    total_amount: Decimal
+    created_at: datetime

@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, platformApi } from "@/lib/platform-api";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
 import type {
+  CompanyRfqDetail,
+  CompanyRfqSummary,
   MarketplaceCompanyLink,
   MarketplaceContact,
   MarketplaceDocument,
@@ -11,6 +13,7 @@ import type {
   MarketplaceSupplierDetail,
   MarketplaceSupplierList,
   MarketplaceSupplierStatus,
+  SupplierMatch,
 } from "@/lib/marketplace-types";
 import type { PlatformAuditEntry } from "@/lib/platform-types";
 
@@ -186,5 +189,45 @@ export function useLinkMarketplaceCompany() {
     mutationFn: ({ supplierId, ...input }: { supplierId: string; company_id: string; notes?: string }) =>
       platformApi.post<MarketplaceCompanyLink>(`/platform/marketplace/suppliers/${supplierId}/company-links`, input, accessToken ?? undefined),
     onSuccess: (_l, vars) => queryClient.invalidateQueries({ queryKey: ["marketplace-company-links", vars.supplierId] }),
+  });
+}
+
+// ---- Matching UI (Phase 4.1 Task 2) ----------------------------------------------------
+
+export function useCompanyRfqs(companyId: string) {
+  const { accessToken } = usePlatformAuth();
+  return useQuery({
+    queryKey: ["platform-company-rfqs", companyId],
+    queryFn: () => platformApi.get<CompanyRfqSummary[]>(`/platform/marketplace/companies/${companyId}/rfqs`, accessToken ?? undefined),
+    enabled: !!accessToken && !!companyId,
+  });
+}
+
+export function useCompanyRfqDetail(companyId: string, rfqId: string) {
+  const { accessToken } = usePlatformAuth();
+  return useQuery({
+    queryKey: ["platform-company-rfq", companyId, rfqId],
+    queryFn: () => platformApi.get<CompanyRfqDetail>(`/platform/marketplace/companies/${companyId}/rfqs/${rfqId}`, accessToken ?? undefined),
+    enabled: !!accessToken && !!companyId && !!rfqId,
+  });
+}
+
+export function useSupplierMatch(companyId: string, materialId: string, area?: string) {
+  const { accessToken } = usePlatformAuth();
+  const params = new URLSearchParams({ material_id: materialId });
+  if (area) params.set("area", area);
+  return useQuery({
+    queryKey: ["platform-marketplace-match", companyId, materialId, area],
+    queryFn: () => platformApi.get<SupplierMatch[]>(`/platform/marketplace/companies/${companyId}/match?${params.toString()}`, accessToken ?? undefined),
+    enabled: !!accessToken && !!companyId && !!materialId,
+  });
+}
+
+export function useAssistInviteSuppliers(companyId: string, rfqId: string) {
+  const { accessToken } = usePlatformAuth();
+  return useMutation({
+    meta: { inlineError: true },
+    mutationFn: (marketplace_supplier_ids: string[]) =>
+      platformApi.post(`/platform/marketplace/companies/${companyId}/rfqs/${rfqId}/invite-suppliers`, { marketplace_supplier_ids }, accessToken ?? undefined),
   });
 }

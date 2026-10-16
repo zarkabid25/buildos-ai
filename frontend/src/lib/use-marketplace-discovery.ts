@@ -5,7 +5,18 @@ import type {
   CompanySupplierConnection,
   DiscoverySupplier,
   DiscoverySupplierDetail,
+  MarketplaceInvitation,
+  QuotationAttribution,
 } from "@/lib/marketplace-client-types";
+
+export function useMarketplaceStatus() {
+  const { accessToken } = useAuth();
+  return useQuery({
+    queryKey: ["marketplace-status"],
+    queryFn: () => api.get<{ enabled: boolean }>("/marketplace/status", accessToken ?? undefined),
+    enabled: !!accessToken,
+  });
+}
 
 export function useDiscoverSuppliers(filters: { search?: string; category?: string; area?: string }) {
   const { accessToken } = useAuth();
@@ -58,5 +69,37 @@ export function useConnectSupplier() {
       queryClient.invalidateQueries({ queryKey: ["marketplace-connections"] });
       queryClient.invalidateQueries({ queryKey: ["suppliers"] });
     },
+  });
+}
+
+export function useRfqInvitations(rfqId: string) {
+  const { accessToken } = useAuth();
+  return useQuery({
+    queryKey: ["marketplace-rfq-invitations", rfqId],
+    queryFn: () => api.get<MarketplaceInvitation[]>(`/marketplace/rfqs/${rfqId}/invitations`, accessToken ?? undefined),
+    enabled: !!accessToken && !!rfqId,
+  });
+}
+
+export function useInviteMarketplaceSuppliers(rfqId: string) {
+  const { accessToken } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { inlineError: true },
+    mutationFn: (marketplace_supplier_ids: string[]) =>
+      api.post<MarketplaceInvitation[]>(`/marketplace/rfqs/${rfqId}/invite-suppliers`, { marketplace_supplier_ids }, accessToken ?? undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["marketplace-rfq-invitations", rfqId] });
+      queryClient.invalidateQueries({ queryKey: ["rfqs"] });
+    },
+  });
+}
+
+export function useQuotationAttributions(rfqId: string) {
+  const { accessToken } = useAuth();
+  return useQuery({
+    queryKey: ["marketplace-quotation-attributions", rfqId],
+    queryFn: () => api.get<QuotationAttribution[]>(`/marketplace/rfqs/${rfqId}/quotation-attributions`, accessToken ?? undefined),
+    enabled: !!accessToken && !!rfqId,
   });
 }

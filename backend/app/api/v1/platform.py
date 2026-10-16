@@ -25,6 +25,7 @@ from app.schemas.platform import (
     PlatformLoginRequest,
     PlatformRefreshRequest,
     PlatformStaffUpdate,
+    MarketplaceFlagUpdate,
 )
 from app.services import platform_audit_service, platform_auth_service, platform_company_service, platform_staff_service
 
@@ -119,6 +120,16 @@ def approve_company(
     admin: PlatformAdmin = Depends(require_platform_roles(PlatformStaffRole.OWNER, PlatformStaffRole.ADMIN)),
 ) -> PlatformCompanyRead:
     return platform_company_service.approve_company(db, company_id, admin)
+
+
+@router.post("/companies/{company_id}/marketplace", response_model=PlatformCompanyRead)
+def set_marketplace_enabled(
+    company_id: uuid.UUID,
+    payload: MarketplaceFlagUpdate,
+    db: Session = Depends(get_db),
+    admin: PlatformAdmin = Depends(require_platform_roles(PlatformStaffRole.OWNER, PlatformStaffRole.ADMIN)),
+) -> PlatformCompanyRead:
+    return platform_company_service.set_marketplace_enabled(db, company_id, payload.enabled, admin)
 
 
 @router.post("/companies/{company_id}/suspend", response_model=PlatformCompanyRead)

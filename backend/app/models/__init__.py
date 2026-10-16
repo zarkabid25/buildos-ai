@@ -58,4 +58,5 @@ from app.models.marketplace_supplier import (  # noqa: F401
     MarketplaceMaterialMapping,
     MarketplaceRfqInvitation,
     MarketplaceDeliveryReport,
+    MarketplaceQuotationAttribution,
 )

@@ -24,9 +24,27 @@ def _read(company: Company, user_count: int) -> PlatformCompanyRead:
         is_active=company.is_active,
         suspended_at=company.suspended_at,
         onboarding_status=company.onboarding_status,
+        marketplace_enabled=company.marketplace_enabled,
         created_at=company.created_at,
         user_count=user_count,
     )
+
+
+def set_marketplace_enabled(db: Session, company_id: uuid.UUID, enabled: bool, actor: PlatformAdmin) -> PlatformCompanyRead:
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Company not found")
+    if company.marketplace_enabled == enabled:
+        return get_company(db, company_id)
+
+    company.marketplace_enabled = enabled
+    platform_audit_service.record(
+        db, actor.id, f"company.marketplace_{'enabled' if enabled else 'disabled'}", "company", company.id,
+        f"Marketplace {'enabled' if enabled else 'disabled'} for {company.name}",
+    )
+    db.commit()
+    db.refresh(company)
+    return get_company(db, company_id)
 
 
 def list_companies(db: Session, search: str | None = None) -> PlatformCompanyList:
