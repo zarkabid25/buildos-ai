@@ -24,13 +24,16 @@ from app.api.v1 import (
     platform_commissions,
     platform_crm,
     platform_marketplace,
+    platform_support,
     procurement,
     project_members,
     projects,
+    public,
     reports,
     rfqs,
     schedule,
     search,
+    support,
     supplier_portal,
     suppliers,
     tasks,
@@ -76,4 +79,7 @@ api_router.include_router(platform_crm.router)
 api_router.include_router(platform_marketplace.router)
 api_router.include_router(platform_billing.router)
 api_router.include_router(platform_commissions.router)
+api_router.include_router(platform_support.router)
+api_router.include_router(public.router)
+api_router.include_router(support.router)
 api_router.include_router(supplier_portal.router)

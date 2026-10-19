@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     login_failure_window_seconds: int = 15 * 60
     register_max_per_ip: int = 10
     register_window_seconds: int = 60 * 60
+    # Phase 8 public forms -- same mechanism, new keys (app/core/rate_limit.py).
+    public_form_max_per_ip: int = 10
+    public_form_window_seconds: int = 60 * 60
 
     llm_api_key: str = ""
     llm_model: str = "claude-opus-5"

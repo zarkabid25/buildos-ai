@@ -101,6 +101,23 @@ def mark_read(db: Session, company_id: uuid.UUID, user_id: uuid.UUID, notificati
     return notification
 
 
+def notify_support_ticket_reply(db: Session, company_id: uuid.UUID, user_id: uuid.UUID, ticket_subject: str, ticket_id: uuid.UUID) -> Notification:
+    """Phase 8 (PLAT-047): the company user who opened a ticket gets told
+    when staff reply -- reuses the existing notification table/service
+    exactly, just a new NotificationType value."""
+    return create_notification(
+        db, company_id, user_id, NotificationType.SUPPORT_TICKET_REPLY,
+        f"New reply on \"{ticket_subject}\"", link=f"/support/{ticket_id}",
+    )
+
+
+def notify_support_ticket_resolved(db: Session, company_id: uuid.UUID, user_id: uuid.UUID, ticket_subject: str, ticket_id: uuid.UUID) -> Notification:
+    return create_notification(
+        db, company_id, user_id, NotificationType.SUPPORT_TICKET_RESOLVED,
+        f"\"{ticket_subject}\" marked resolved", link=f"/support/{ticket_id}",
+    )
+
+
 def mark_all_read(db: Session, company_id: uuid.UUID, user_id: uuid.UUID) -> int:
     updated = (
         db.query(Notification)

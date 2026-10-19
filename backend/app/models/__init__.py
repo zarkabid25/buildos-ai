@@ -80,3 +80,6 @@ from app.models.commission import (  # noqa: F401
     CommissionPayment,
 )
 from app.models.supplier_user import SupplierUser, SupplierMembership, SupplierInvitation  # noqa: F401
+from app.models.public_site import DemoRequest, SupplierApplication, SupplierApplicationDocument  # noqa: F401
+from app.models.support import SupportTicket, SupportTicketMessage  # noqa: F401
+from app.models.platform_notification import SupplierNotification, PlatformNotification, EmailDeliveryLog  # noqa: F401

@@ -96,6 +96,8 @@ class NotificationType(str, enum.Enum):
     MATERIAL_REQUEST_PENDING = "material_request_pending"
     PURCHASE_ORDER_PENDING = "purchase_order_pending"
     AI_PROPOSAL_PENDING = "ai_proposal_pending"
+    SUPPORT_TICKET_REPLY = "support_ticket_reply"
+    SUPPORT_TICKET_RESOLVED = "support_ticket_resolved"
 
 
 class RfqStatus(str, enum.Enum):
@@ -262,3 +264,57 @@ class SupplierMembershipStatus(str, enum.Enum):
     ACTIVE = "active"
     SUSPENDED = "suspended"
     REVOKED = "revoked"
+
+
+# ---- Phase 8: public website, onboarding and support (PLAT-043..047) -----------------------
+
+
+class SupplierApplicationStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class SupportTicketCategory(str, enum.Enum):
+    BILLING = "billing"
+    TECHNICAL = "technical"
+    ACCOUNT = "account"
+    MARKETPLACE = "marketplace"
+    OTHER = "other"
+
+
+class SupportTicketPriority(str, enum.Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    URGENT = "urgent"
+
+
+class SupportTicketStatus(str, enum.Enum):
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    WAITING_ON_REQUESTER = "waiting_on_requester"
+    RESOLVED = "resolved"
+    CLOSED = "closed"
+
+
+class SupportRequesterType(str, enum.Enum):
+    COMPANY = "company"
+    SUPPLIER = "supplier"
+
+
+class SupportAuthorType(str, enum.Enum):
+    COMPANY_USER = "company_user"
+    SUPPLIER_USER = "supplier_user"
+    STAFF = "staff"
+
+
+class EmailDeliveryStatus(str, enum.Enum):
+    """Honest about reality (Phase 8 brief, PLAT-047): this app has no SMTP
+    provider configured. SENT is only ever recorded once a real provider
+    actually accepts the message -- never assumed. NOT_CONFIGURED is the
+    expected status in every environment today."""
+
+    NOT_CONFIGURED = "not_configured"
+    SENT = "sent"
+    FAILED = "failed"

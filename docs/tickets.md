@@ -254,8 +254,15 @@ Per `docs/design-system.md` (BuildOS AI 2.0 global UI/UX instructions). A separa
 - [x] PLAT-041 RFQ inbox and quotations (`/supplier-portal/rfqs` + `/[id]`, `/supplier-portal/quotations`; reuses `rfq_service.record_quotation` via the same actor-substitution trick as platform-staff-assisted quotes; real `MarketplaceQuotationAttribution` with `method="supplier_self_submitted"`, never attributed to staff)
 - [x] PLAT-042 Orders, delivery and commission statements (`/supplier-portal/orders` + `/[id]`, `/supplier-portal/commissions` + invoice detail; delivery updates reuse `MarketplaceDeliveryReport`, confirmed to never post stock; commission statement is read-only and reuses the Phase 6 commission services, fully isolated per supplier)
 - [ ] BUILD-151 Payments and invoices (platform-level, i.e. BuildOS billing its own customers — distinct from the existing tenant-level `payments` module)
-- [ ] BUILD-152 Support tickets
+- [x] BUILD-152 Support tickets (superseded by PLAT-046 below)
 - [ ] BUILD-153 AI business intelligence
+
+### Phase 8 — Public SaaS Website, Onboarding & Support
+- [x] PLAT-043 Public website (`/`, `/features`, `/construction-erp`, `/supplier-network`, `/pricing`, `/about`, `/contact`; dark-navy premium theme, sitemap.xml/robots.txt, per-page SEO metadata; `/marketplace` renamed to `/supplier-network` for the public page since the authenticated ERP route already owns `/marketplace`)
+- [x] PLAT-044 Company registration and demo requests (`/register` reused unmodified; `/request-demo` creates/reuses a real `CrmOrganization` lead, never duplicated, with 24h duplicate-submission protection; new companies confirmed never grandfathered)
+- [x] PLAT-045 Supplier application (`/become-a-supplier`; new `SupplierApplication` pending-review table; approval reuses the existing unmodified `marketplace_supplier_service.create_supplier`, resulting supplier always still PENDING verification — never auto-verified, confirmed live)
+- [x] PLAT-046 Support desk (`/support`+`/[id]`, `/supplier-portal/support`+`/[id]`, `/platform-admin/support`+`/[id]`; one `SupportTicket`/`SupportTicketMessage` schema for both requester types; internal staff notes filtered server-side, never exposed externally; full company/supplier isolation; staff actions audited)
+- [x] PLAT-047 Onboarding and notifications (two new `NotificationType` values added to the existing tenant `Notification` table via additive `ALTER TYPE`; new `PlatformNotification`/`SupplierNotification` tables for the two actor types with no prior notification concept; `email_service.send_email` honestly records `NOT_CONFIGURED` rather than pretending delivery)
 
 ## Epic 26 — Deployment
 - [~] BUILD-135 Production Docker setup (Dockerfile.prod for both apps + deploy/docker-compose.prod.yml; production `next build` and migrations verified, but no Docker on this machine, so the images themselves have not been built)

@@ -24,6 +24,10 @@ PUBLIC = {
     ("GET", "/api/v1/supplier-portal/auth/invitations/{token}"),
     ("POST", "/api/v1/supplier-portal/auth/accept-invite"),
     ("POST", "/api/v1/supplier-portal/auth/select-supplier"),
+    ("GET", "/api/v1/public/plans"),
+    ("POST", "/api/v1/public/demo-requests"),
+    ("POST", "/api/v1/public/supplier-applications"),
+    ("POST", "/api/v1/public/supplier-applications/{application_id}/documents"),
 }
 
 

@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ClipboardList, FileText, LayoutDashboard, Menu, Package, Percent, ShoppingCart, User, X } from "lucide-react";
+import { ClipboardList, FileText, LayoutDashboard, LifeBuoy, Menu, Package, Percent, ShoppingCart, User, X } from "lucide-react";
 import { useSupplierAuth } from "@/lib/supplier-auth-context";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { label: "Quotations", href: "/supplier-portal/quotations", icon: FileText },
   { label: "Orders", href: "/supplier-portal/orders", icon: ShoppingCart },
   { label: "Commissions", href: "/supplier-portal/commissions", icon: Percent },
+  { label: "Support", href: "/supplier-portal/support", icon: LifeBuoy },
   { label: "Profile", href: "/supplier-portal/profile", icon: User },
 ];
 

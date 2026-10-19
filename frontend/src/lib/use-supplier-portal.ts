@@ -368,6 +368,59 @@ export function useSupplierCommissionInvoice(invoiceId: string) {
   });
 }
 
+// ---- PLAT-046: support desk ---------------------------------------------------------------------
+
+export function useSupplierSupportTickets() {
+  const { accessToken } = useSupplierAuth();
+  return useQuery({
+    queryKey: ["supplier-support-tickets"],
+    queryFn: () => supplierApi.get<import("@/lib/support-types").SupportTicketSummary[]>("/supplier-portal/support", accessToken ?? undefined),
+    enabled: !!accessToken,
+  });
+}
+
+export function useSupplierSupportTicket(ticketId: string) {
+  const { accessToken } = useSupplierAuth();
+  return useQuery({
+    queryKey: ["supplier-support-ticket", ticketId],
+    queryFn: () => supplierApi.get<import("@/lib/support-types").SupportTicket>(`/supplier-portal/support/${ticketId}`, accessToken ?? undefined),
+    enabled: !!accessToken && !!ticketId,
+  });
+}
+
+export function useCreateSupplierSupportTicket() {
+  const { accessToken } = useSupplierAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { inlineError: true },
+    mutationFn: (input: { subject: string; category: string; priority?: string; message: string }) =>
+      supplierApi.post("/supplier-portal/support", input, accessToken ?? undefined),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["supplier-support-tickets"] }),
+  });
+}
+
+export function useReplySupplierSupportTicket(ticketId: string) {
+  const { accessToken } = useSupplierAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { inlineError: true },
+    mutationFn: (body: string) => supplierApi.post(`/supplier-portal/support/${ticketId}/messages`, { body }, accessToken ?? undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["supplier-support-ticket", ticketId] });
+      queryClient.invalidateQueries({ queryKey: ["supplier-support-tickets"] });
+    },
+  });
+}
+
+export function useSupplierNotifications() {
+  const { accessToken } = useSupplierAuth();
+  return useQuery({
+    queryKey: ["supplier-portal-notifications"],
+    queryFn: () => supplierApi.get<{ id: string; notification_type: string; title: string; body: string | null; link: string | null; is_read: boolean; created_at: string }[]>("/supplier-portal/notifications", accessToken ?? undefined),
+    enabled: !!accessToken,
+  });
+}
+
 export function useSupplierCommissionDisputes() {
   const { accessToken } = useSupplierAuth();
   return useQuery({

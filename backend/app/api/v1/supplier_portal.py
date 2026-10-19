@@ -38,11 +38,14 @@ from app.schemas.supplier_portal import (
     SupplierTokenPair,
     SupplierUserRead,
 )
+from app.schemas.support import SupportTicketCreate, SupportTicketMessageCreate, SupportTicketRead, SupportTicketSummary
 from app.services import (
+    support_ticket_service,
     supplier_auth_service,
     supplier_commission_service,
     supplier_invitation_service,
     supplier_membership_service,
+    supplier_notification_service,
     supplier_order_service,
     supplier_portal_service,
     supplier_product_service,
@@ -261,3 +264,44 @@ def get_my_invoice(invoice_id: uuid.UUID, session: SupplierSession = Depends(get
 def list_my_disputes(status: CommissionDisputeStatus | None = None, session: SupplierSession = Depends(get_current_supplier_user), db: Session = Depends(get_db)) -> list[CommissionDisputeRead]:
     disputes = supplier_commission_service.list_my_disputes(db, session.marketplace_supplier_id)
     return [d for d in disputes if status is None or d.status == status]
+
+
+# ---- Phase 8 (PLAT-046): support desk -----------------------------------------------------------
+
+
+@router.post("/support", response_model=SupportTicketRead, status_code=201)
+def create_support_ticket(payload: SupportTicketCreate, session: SupplierSession = Depends(get_current_supplier_user), db: Session = Depends(get_db)) -> SupportTicketRead:
+    return support_ticket_service.create_supplier_ticket(db, session.marketplace_supplier_id, session.user, payload)
+
+
+@router.get("/support", response_model=list[SupportTicketSummary])
+def list_support_tickets(session: SupplierSession = Depends(get_current_supplier_user), db: Session = Depends(get_db)) -> list[SupportTicketSummary]:
+    return support_ticket_service.list_supplier_tickets(db, session.marketplace_supplier_id)
+
+
+@router.get("/support/{ticket_id}", response_model=SupportTicketRead)
+def get_support_ticket(ticket_id: uuid.UUID, session: SupplierSession = Depends(get_current_supplier_user), db: Session = Depends(get_db)) -> SupportTicketRead:
+    return support_ticket_service.get_supplier_ticket(db, session.marketplace_supplier_id, ticket_id)
+
+
+@router.post("/support/{ticket_id}/messages", response_model=SupportTicketRead, status_code=201)
+def reply_support_ticket(ticket_id: uuid.UUID, payload: SupportTicketMessageCreate, session: SupplierSession = Depends(get_current_supplier_user), db: Session = Depends(get_db)) -> SupportTicketRead:
+    return support_ticket_service.reply_as_supplier(db, session.marketplace_supplier_id, session.user, ticket_id, payload)
+
+
+# ---- Phase 8 (PLAT-047): notifications ------------------------------------------------------------
+
+
+@router.get("/notifications")
+def list_notifications(unread_only: bool = False, session: SupplierSession = Depends(get_current_supplier_user), db: Session = Depends(get_db)):
+    rows = supplier_notification_service.list_notifications(db, session.user.id, unread_only)
+    return [
+        {"id": n.id, "notification_type": n.notification_type, "title": n.title, "body": n.body, "link": n.link, "is_read": n.is_read, "created_at": n.created_at}
+        for n in rows
+    ]
+
+
+@router.post("/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: uuid.UUID, session: SupplierSession = Depends(get_current_supplier_user), db: Session = Depends(get_db)):
+    n = supplier_notification_service.mark_read(db, session.user.id, notification_id)
+    return {"id": n.id, "is_read": n.is_read}
