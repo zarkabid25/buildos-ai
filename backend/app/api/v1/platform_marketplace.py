@@ -40,7 +40,8 @@ from app.schemas.marketplace_integration import (
 )
 from app.schemas.platform import PlatformAuditEntry
 from app.schemas.rfq import RfqRead, RfqSummary
-from app.services import marketplace_integration_service, marketplace_supplier_service, rfq_service
+from app.schemas.supplier_portal import SupplierInvitationCreate, SupplierInvitationCreated, SupplierInvitationRead, SupplierMembershipRead
+from app.services import marketplace_integration_service, marketplace_supplier_service, rfq_service, supplier_invitation_service, supplier_membership_service
 
 router = APIRouter(prefix="/platform/marketplace", tags=["platform-marketplace"])
 
@@ -286,3 +287,27 @@ def get_company_rfq(
     _admin: PlatformAdmin = Depends(get_current_platform_admin),
 ) -> RfqRead:
     return rfq_service.to_read(db, company_id, rfq_service.get_rfq(db, company_id, rfq_id))
+
+
+# ---- Phase 7 (PLAT-038): staff onboards a verified supplier's first portal user ------------
+
+
+@router.post("/suppliers/{supplier_id}/portal-invitations", response_model=SupplierInvitationCreated, status_code=201)
+def invite_supplier_portal_user(
+    supplier_id: uuid.UUID, payload: SupplierInvitationCreate, db: Session = Depends(get_db), admin: PlatformAdmin = Depends(_can_edit)
+) -> SupplierInvitationCreated:
+    return supplier_invitation_service.create_invitation_by_staff(db, admin, supplier_id, payload)
+
+
+@router.get("/suppliers/{supplier_id}/portal-invitations", response_model=list[SupplierInvitationRead])
+def list_supplier_portal_invitations(
+    supplier_id: uuid.UUID, db: Session = Depends(get_db), _admin: PlatformAdmin = Depends(get_current_platform_admin)
+) -> list[SupplierInvitationRead]:
+    return supplier_invitation_service.list_invitations(db, supplier_id)
+
+
+@router.get("/suppliers/{supplier_id}/portal-members", response_model=list[SupplierMembershipRead])
+def list_supplier_portal_members(
+    supplier_id: uuid.UUID, db: Session = Depends(get_db), _admin: PlatformAdmin = Depends(get_current_platform_admin)
+) -> list[SupplierMembershipRead]:
+    return supplier_membership_service.list_members(db, supplier_id)

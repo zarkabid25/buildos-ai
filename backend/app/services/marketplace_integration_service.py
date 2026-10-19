@@ -422,14 +422,19 @@ def record_quotation_for_marketplace_supplier(
 
 
 def get_quotation_attributions(db: Session, company_id: uuid.UUID, rfq_id: uuid.UUID) -> list[QuotationAttributionRead]:
-    """Every platform-staff-assisted submission on this RFQ, in order -- the
-    honest record of who actually entered each quotation, separate from
-    (and never overriding) Quotation.created_by_id."""
+    """Every submission on this RFQ, in order -- platform-staff-assisted AND
+    (Phase 7) supplier-self-submitted. Outer-joins both possible submitter
+    types deliberately: exactly one is ever populated per row, and an inner
+    join here would silently drop every self-submitted row now that
+    submitted_by_staff_id is nullable."""
+    from app.models.supplier_user import SupplierUser
+
     rfq_service.get_rfq(db, company_id, rfq_id)  # isolation
     rows = (
-        db.query(MarketplaceQuotationAttribution, MarketplaceSupplier.name, PlatformAdmin.full_name)
+        db.query(MarketplaceQuotationAttribution, MarketplaceSupplier.name, PlatformAdmin.full_name, SupplierUser.full_name)
         .join(MarketplaceSupplier, MarketplaceSupplier.id == MarketplaceQuotationAttribution.marketplace_supplier_id)
-        .join(PlatformAdmin, PlatformAdmin.id == MarketplaceQuotationAttribution.submitted_by_staff_id)
+        .outerjoin(PlatformAdmin, PlatformAdmin.id == MarketplaceQuotationAttribution.submitted_by_staff_id)
+        .outerjoin(SupplierUser, SupplierUser.id == MarketplaceQuotationAttribution.submitted_by_supplier_user_id)
         .filter(MarketplaceQuotationAttribution.rfq_id == rfq_id)
         .order_by(MarketplaceQuotationAttribution.created_at.desc())
         .all()
@@ -442,11 +447,13 @@ def get_quotation_attributions(db: Session, company_id: uuid.UUID, rfq_id: uuid.
             marketplace_supplier_name=supplier_name,
             submitted_by_staff_id=a.submitted_by_staff_id,
             submitted_by_staff_name=staff_name,
+            submitted_by_supplier_user_id=a.submitted_by_supplier_user_id,
+            submitted_by_supplier_user_name=supplier_user_name,
             method=a.method,
             total_amount=a.total_amount,
             created_at=a.created_at,
         )
-        for a, supplier_name, staff_name in rows
+        for a, supplier_name, staff_name, supplier_user_name in rows
     ]
 
 

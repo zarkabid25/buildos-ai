@@ -27,7 +27,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def _create_token(
     subject: str,
     expires_delta: timedelta,
-    token_type: Literal["access", "refresh", "platform_access", "platform_refresh"],
+    token_type: Literal["access", "refresh", "platform_access", "platform_refresh", "supplier_access", "supplier_refresh"],
+    extra_claims: dict[str, Any] | None = None,
 ) -> str:
     now = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
@@ -37,6 +38,8 @@ def _create_token(
         "exp": now + expires_delta,
         "jti": str(uuid.uuid4()),
     }
+    if extra_claims:
+        payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
@@ -61,6 +64,24 @@ def create_platform_access_token(admin_id: str) -> str:
 def create_platform_refresh_token(admin_id: str) -> str:
     return _create_token(
         admin_id, timedelta(days=settings.refresh_token_expire_days), "platform_refresh"
+    )
+
+
+def create_supplier_access_token(supplier_user_id: str, active_supplier_id: str | None) -> str:
+    """`active_supplier_id` is the currently-selected marketplace supplier
+    (PLAT-038's "explicit active-supplier selection") -- null when a
+    multi-membership user has just logged in but not yet picked one, in
+    which case every supplier-scoped endpoint refuses the token (see
+    get_current_supplier_user) until select_supplier mints a new one."""
+    return _create_token(
+        supplier_user_id, timedelta(minutes=settings.access_token_expire_minutes), "supplier_access",
+        extra_claims={"active_supplier_id": active_supplier_id},
+    )
+
+
+def create_supplier_refresh_token(supplier_user_id: str) -> str:
+    return _create_token(
+        supplier_user_id, timedelta(days=settings.refresh_token_expire_days), "supplier_refresh"
     )
 
 

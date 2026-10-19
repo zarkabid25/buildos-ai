@@ -247,3 +247,18 @@ class CommissionDisputeStatus(str, enum.Enum):
     OPEN = "open"
     APPROVED = "approved"
     REJECTED = "rejected"
+
+
+# ---- Phase 7: supplier self-service portal (PLAT-038..042) ---------------------------------
+
+
+class SupplierMembershipRole(str, enum.Enum):
+    OWNER = "owner"
+    ADMIN = "admin"
+    STAFF = "staff"
+
+
+class SupplierMembershipStatus(str, enum.Enum):
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    REVOKED = "revoked"

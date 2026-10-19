@@ -246,6 +246,13 @@ Per `docs/design-system.md` (BuildOS AI 2.0 global UI/UX instructions). A separa
 - [x] PLAT-036 Disputes and adjustments (`commission_disputes`; approval posts a new reversal entry via `commission_service.reverse_entry`, never edits the original; standalone adjustments supported separately)
 - [x] PLAT-037 Revenue dashboard (`/platform-admin/commissions/revenue`: earned/invoiced/collected/outstanding kept distinct; marketplace order value reported separately, never counted as commission revenue)
 - [x] BUILD-150 Commission tracking (superseded by PLAT-033..037 above)
+
+### Phase 7 — Supplier Self-Service Portal
+- [x] PLAT-038 Supplier authentication and memberships (`SupplierUser`/`SupplierMembership`/`SupplierInvitation`; a third, independent `supplier_access`/`supplier_refresh` JWT system; explicit active-supplier selection via a dedicated `select-supplier` endpoint; owner/admin/staff roles; suspend/revoke/reinstate)
+- [x] PLAT-039 Supplier dashboard and profile (`/supplier-portal`, `/supplier-portal/profile`; legal name/verification status never supplier-editable, staff approval workflow preserved)
+- [x] PLAT-040 Product catalog management (`/supplier-portal/products` + `/new` + `/[id]`; reuses the existing `MarketplaceProduct` table/service, ownership-enforced)
+- [x] PLAT-041 RFQ inbox and quotations (`/supplier-portal/rfqs` + `/[id]`, `/supplier-portal/quotations`; reuses `rfq_service.record_quotation` via the same actor-substitution trick as platform-staff-assisted quotes; real `MarketplaceQuotationAttribution` with `method="supplier_self_submitted"`, never attributed to staff)
+- [x] PLAT-042 Orders, delivery and commission statements (`/supplier-portal/orders` + `/[id]`, `/supplier-portal/commissions` + invoice detail; delivery updates reuse `MarketplaceDeliveryReport`, confirmed to never post stock; commission statement is read-only and reuses the Phase 6 commission services, fully isolated per supplier)
 - [ ] BUILD-151 Payments and invoices (platform-level, i.e. BuildOS billing its own customers — distinct from the existing tenant-level `payments` module)
 - [ ] BUILD-152 Support tickets
 - [ ] BUILD-153 AI business intelligence

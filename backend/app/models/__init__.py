@@ -79,3 +79,4 @@ from app.models.commission import (  # noqa: F401
     CommissionInvoiceLineItem,
     CommissionPayment,
 )
+from app.models.supplier_user import SupplierUser, SupplierMembership, SupplierInvitation  # noqa: F401

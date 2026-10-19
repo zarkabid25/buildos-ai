@@ -1,5 +1,6 @@
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -7,11 +8,25 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_token
 from app.db.session import get_db
-from app.models.enums import PlatformStaffRole, UserRole
+from app.models.enums import MarketplaceSupplierStatus, PlatformStaffRole, SupplierMembershipRole, SupplierMembershipStatus, UserRole
+from app.models.marketplace_supplier import MarketplaceSupplier
 from app.models.platform_admin import PlatformAdmin
+from app.models.supplier_user import SupplierMembership, SupplierUser
 from app.models.user import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+@dataclass
+class SupplierSession:
+    """The authenticated identity for every /supplier-portal route: who is
+    logged in, and which single marketplace supplier they're currently
+    acting for (never more than one at a time, per PLAT-038's explicit
+    active-supplier-selection requirement)."""
+
+    user: SupplierUser
+    membership: SupplierMembership
+    marketplace_supplier_id: uuid.UUID
 
 
 def get_current_user(
@@ -60,6 +75,62 @@ def get_current_platform_admin(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
 
     return admin
+
+
+def get_current_supplier_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> SupplierSession:
+    # Same separation as the other two: a "supplier_access" token is its own
+    # type claim, so a tenant or platform token can never satisfy this, and
+    # vice versa -- this route family can never be reached from either of
+    # the other two token types.
+    if credentials is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
+
+    payload = decode_token(credentials.credentials)
+    if not payload or payload.get("type") != "supplier_access":
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
+
+    try:
+        supplier_user_id = uuid.UUID(payload["sub"])
+    except (KeyError, ValueError, TypeError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
+
+    active_supplier_id = payload.get("active_supplier_id")
+    if not active_supplier_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Select a supplier organization before continuing")
+    try:
+        active_supplier_id = uuid.UUID(active_supplier_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
+
+    user = db.query(SupplierUser).filter(SupplierUser.id == supplier_user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
+
+    membership = (
+        db.query(SupplierMembership)
+        .filter(SupplierMembership.supplier_user_id == user.id, SupplierMembership.marketplace_supplier_id == active_supplier_id)
+        .first()
+    )
+    if not membership or membership.status != SupplierMembershipStatus.ACTIVE:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You're no longer authorized for this supplier organization")
+
+    supplier = db.query(MarketplaceSupplier).filter(MarketplaceSupplier.id == active_supplier_id).first()
+    if not supplier or supplier.verification_status != MarketplaceSupplierStatus.VERIFIED:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This supplier organization isn't currently verified")
+
+    return SupplierSession(user=user, membership=membership, marketplace_supplier_id=active_supplier_id)
+
+
+def require_supplier_roles(*allowed_roles: SupplierMembershipRole) -> Callable[[SupplierSession], SupplierSession]:
+    def _check(session: SupplierSession = Depends(get_current_supplier_user)) -> SupplierSession:
+        if session.membership.role not in allowed_roles:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient permissions")
+        return session
+
+    return _check
 
 
 def require_roles(*allowed_roles: UserRole) -> Callable[[User], User]:

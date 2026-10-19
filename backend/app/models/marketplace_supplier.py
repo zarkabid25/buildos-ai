@@ -74,7 +74,12 @@ class MarketplaceSupplierDocument(TimestampedBase):
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
-    uploaded_by_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_admins.id"), nullable=False)
+    # Exactly one of these two is set -- a staff-uploaded verification
+    # document (the original path), or (Phase 7) the supplier uploading its
+    # own via the portal. Loosening to nullable is additive: every existing
+    # row already has uploaded_by_id populated.
+    uploaded_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_admins.id"), nullable=True)
+    uploaded_by_supplier_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("supplier_users.id"), nullable=True)
 
 
 class MarketplaceSupplierCategory(TimestampedBase):
@@ -212,7 +217,11 @@ class MarketplaceDeliveryReport(TimestampedBase):
     )
     external_reference: Mapped[str] = mapped_column(String(100), nullable=False)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    reported_by_staff_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_admins.id"), nullable=False)
+    # Exactly one of these two is set (Phase 7 adds the supplier's own portal
+    # reporting path alongside the existing staff-entered one) -- loosening
+    # reported_by_staff_id to nullable is additive, every existing row keeps it.
+    reported_by_staff_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_admins.id"), nullable=True)
+    reported_by_supplier_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("supplier_users.id"), nullable=True)
 
 
 class MarketplaceQuotationAttribution(TimestampedBase):
@@ -234,6 +243,12 @@ class MarketplaceQuotationAttribution(TimestampedBase):
     marketplace_supplier_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("marketplace_suppliers.id"), index=True, nullable=False
     )
-    submitted_by_staff_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_admins.id"), nullable=False)
+    # Exactly one of these two is set: a platform-staff-assisted submission, or
+    # (Phase 7) the supplier's own portal user submitting it directly --
+    # method distinguishes the two ("platform_staff_assisted" vs
+    # "supplier_self_submitted"). Loosening submitted_by_staff_id to nullable
+    # is additive/backward-compatible: every existing row already has it set.
+    submitted_by_staff_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_admins.id"), nullable=True)
+    submitted_by_supplier_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("supplier_users.id"), nullable=True)
     method: Mapped[str] = mapped_column(String(50), default="platform_staff_assisted", nullable=False)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)

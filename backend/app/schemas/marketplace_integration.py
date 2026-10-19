@@ -135,7 +135,8 @@ class DeliveryReportRead(BaseModel):
     purchase_order_id: uuid.UUID
     external_reference: str
     note: str | None
-    reported_by_staff_id: uuid.UUID
+    reported_by_staff_id: uuid.UUID | None
+    reported_by_supplier_user_id: uuid.UUID | None = None
     created_at: datetime
     already_recorded: bool = False
 
@@ -166,8 +167,10 @@ class QuotationAttributionRead(BaseModel):
     quotation_id: uuid.UUID
     marketplace_supplier_id: uuid.UUID
     marketplace_supplier_name: str
-    submitted_by_staff_id: uuid.UUID
-    submitted_by_staff_name: str
+    submitted_by_staff_id: uuid.UUID | None
+    submitted_by_staff_name: str | None
+    submitted_by_supplier_user_id: uuid.UUID | None = None
+    submitted_by_supplier_user_name: str | None = None
     method: str
     total_amount: Decimal
     created_at: datetime

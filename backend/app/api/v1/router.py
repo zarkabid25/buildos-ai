@@ -31,6 +31,7 @@ from app.api.v1 import (
     rfqs,
     schedule,
     search,
+    supplier_portal,
     suppliers,
     tasks,
     users,
@@ -75,3 +76,4 @@ api_router.include_router(platform_crm.router)
 api_router.include_router(platform_marketplace.router)
 api_router.include_router(platform_billing.router)
 api_router.include_router(platform_commissions.router)
+api_router.include_router(supplier_portal.router)
