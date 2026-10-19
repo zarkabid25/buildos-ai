@@ -70,3 +70,12 @@ from app.models.billing import (  # noqa: F401
     SubscriptionEvent,
     CompanyLegacyEntitlement,
 )
+from app.models.commission import (  # noqa: F401
+    SupplierCommissionAgreement,
+    MarketplacePoAttribution,
+    CommissionLedgerEntry,
+    CommissionDispute,
+    CommissionInvoice,
+    CommissionInvoiceLineItem,
+    CommissionPayment,
+)

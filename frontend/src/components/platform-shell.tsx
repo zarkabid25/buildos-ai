@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { BarChart3, Building2, CalendarClock, CreditCard, FileText, LayoutGrid, ListChecks, Menu, Search, Tag, Target, Truck, Users2, Users, X } from "lucide-react";
+import { BarChart3, Building2, CalendarClock, CreditCard, FileText, LayoutGrid, ListChecks, Menu, Percent, Search, Tag, Target, Truck, Users2, Users, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { label: "Subscriptions", href: "/platform-admin/billing/subscriptions", icon: Users2 },
   { label: "Invoices", href: "/platform-admin/billing/invoices", icon: FileText },
   { label: "Revenue", href: "/platform-admin/billing/revenue", icon: BarChart3 },
+  { label: "Commissions", href: "/platform-admin/commissions", icon: Percent },
   { label: "Staff", href: "/platform-admin/staff", icon: Users },
   { label: "Audit Log", href: "/platform-admin/audit", icon: ListChecks },
 ];

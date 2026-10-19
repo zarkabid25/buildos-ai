@@ -239,7 +239,13 @@ Per `docs/design-system.md` (BuildOS AI 2.0 global UI/UX instructions). A separa
 - [x] Task 4: Subscription Activity History (rendered on the company detail page from real `SubscriptionEvent` rows; no fabricated events)
 - [x] Task 5: Company Renewal UI (`/billing` "Request renewal invoice" action; idempotent `POST /billing/subscriptions/{id}/renew`, verified to never create a duplicate invoice on repeated requests)
 - [x] Task 6: Financial and compatibility tests (+8 in `test_billing_http.py`: directory/filter coverage, new companies never auto-grandfathered, MRR excludes non-active subscriptions, renewal idempotency before and after activation)
-- [ ] BUILD-150 Commission tracking (needs the marketplace order model)
+### Phase 6 — Marketplace Commissions & Revenue Management
+- [x] PLAT-033 Supplier commission agreements (`supplier_commission_agreements`: percentage/fixed-fee, versioned like `PlanPrice`, one active agreement per supplier enforced by a partial unique index, date-bounded expiration)
+- [x] PLAT-034 Commission ledger (`commission_ledger_entries`, append-only; `MarketplacePoAttribution` is the single source of truth for commission-eligibility, written once at RFQ award time; accrual triggers only on a real `SupplierPayment`, never on PO/goods-receipt value; partial-unique-index idempotency against duplicate accrual)
+- [x] PLAT-035 Commission invoices and payments (`commission_invoices`/`commission_payments`, separate `COMM-xxxxx` numbering from SaaS billing's `INV-xxxxx`; partial settlement; unique-per-ledger-entry billing guard)
+- [x] PLAT-036 Disputes and adjustments (`commission_disputes`; approval posts a new reversal entry via `commission_service.reverse_entry`, never edits the original; standalone adjustments supported separately)
+- [x] PLAT-037 Revenue dashboard (`/platform-admin/commissions/revenue`: earned/invoiced/collected/outstanding kept distinct; marketplace order value reported separately, never counted as commission revenue)
+- [x] BUILD-150 Commission tracking (superseded by PLAT-033..037 above)
 - [ ] BUILD-151 Payments and invoices (platform-level, i.e. BuildOS billing its own customers — distinct from the existing tenant-level `payments` module)
 - [ ] BUILD-152 Support tickets
 - [ ] BUILD-153 AI business intelligence

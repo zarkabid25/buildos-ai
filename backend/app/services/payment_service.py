@@ -22,7 +22,7 @@ from app.schemas.payment import (
     SupplierPaymentCreate,
     SupplierPaymentRead,
 )
-from app.services import audit_service
+from app.services import audit_service, commission_service
 from app.services.procurement_service import get_purchase_order
 from app.services.project_service import get_project
 
@@ -47,6 +47,11 @@ def record_supplier_payment(
     payment = SupplierPayment(company_id=company_id, created_by_id=user_id, **payload.model_dump())
     db.add(payment)
     db.flush()
+    # Additive, one-call hook (Phase 6, PLAT-034): accrues marketplace
+    # commission if and only if this PO is marketplace-attributed and an
+    # agreement is in force. A no-op for every ordinary ERP supplier
+    # payment -- nothing about recording the payment itself changes.
+    commission_service.accrue_on_supplier_payment(db, company_id, payment)
     audit_service.record(
         db, company_id, user_id, "payment.supplier", "purchase_order", po.id,
         f"Paid {payload.amount:,.2f} against {po.po_number} ({payload.method.value.replace('_', ' ')})",

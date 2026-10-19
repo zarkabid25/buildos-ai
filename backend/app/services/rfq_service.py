@@ -29,7 +29,7 @@ from app.schemas.rfq import (
     RfqRead,
     RfqSummary,
 )
-from app.services import audit_service, procurement_service
+from app.services import audit_service, commission_service, procurement_service
 from app.services.material_service import get_material
 from app.services.project_service import get_project
 from app.services.supplier_service import get_supplier
@@ -196,6 +196,11 @@ def award(db: Session, company_id: uuid.UUID, user_id: uuid.UUID, rfq_id: uuid.U
         db.rollback()
         raise
     rfq.purchase_order_id = po.id
+    # Additive, one-call hook (Phase 6, PLAT-034): records that this PO is
+    # commission-eligible if and only if the awarded quotation was itself
+    # marketplace-attributed. A no-op for every ordinary ERP RFQ -- nothing
+    # about awarding, drafting the PO, or this RFQ's own status changes.
+    commission_service.record_po_attribution_if_marketplace_sourced(db, company_id, po.id, rfq.id, quotation.id, total)
     db.commit()
     return get_rfq(db, company_id, rfq_id)
 

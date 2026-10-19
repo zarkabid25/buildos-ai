@@ -21,6 +21,7 @@ from app.api.v1 import (
     payments,
     platform,
     platform_billing,
+    platform_commissions,
     platform_crm,
     platform_marketplace,
     procurement,
@@ -73,3 +74,4 @@ api_router.include_router(platform.router)
 api_router.include_router(platform_crm.router)
 api_router.include_router(platform_marketplace.router)
 api_router.include_router(platform_billing.router)
+api_router.include_router(platform_commissions.router)

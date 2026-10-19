@@ -206,3 +206,44 @@ class PaymentSubmissionStatus(str, enum.Enum):
     PENDING = "pending"
     VERIFIED = "verified"
     REJECTED = "rejected"
+
+
+# ---- Phase 6: marketplace commissions (PLAT-033..037) -------------------------------------
+
+
+class CommissionBasis(str, enum.Enum):
+    PERCENTAGE = "percentage"
+    FIXED_FEE = "fixed_fee"
+
+
+class CommissionEarningTrigger(str, enum.Enum):
+    # Only ON_PAYMENT is actually wired to accrue commission today -- see
+    # commission_service's module docstring for why (verified-payment
+    # attribution is the only reliable signal that exists in this schema).
+    ON_PAYMENT = "on_payment"
+
+
+class CommissionAgreementStatus(str, enum.Enum):
+    ACTIVE = "active"
+    SUPERSEDED = "superseded"
+    CANCELLED = "cancelled"
+
+
+class CommissionLedgerEntryKind(str, enum.Enum):
+    ACCRUAL = "accrual"
+    REVERSAL = "reversal"
+    ADJUSTMENT = "adjustment"
+
+
+class CommissionInvoiceStatus(str, enum.Enum):
+    DRAFT = "draft"
+    PENDING = "pending"
+    PARTIALLY_PAID = "partially_paid"
+    PAID = "paid"
+    VOID = "void"
+
+
+class CommissionDisputeStatus(str, enum.Enum):
+    OPEN = "open"
+    APPROVED = "approved"
+    REJECTED = "rejected"
