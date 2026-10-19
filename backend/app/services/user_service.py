@@ -23,7 +23,7 @@ from app.schemas.user import (
     UserAdminUpdate,
     UserSelfUpdate,
 )
-from app.services import audit_service
+from app.services import audit_service, entitlement_service
 
 
 def update_me(db: Session, user: User, payload: UserSelfUpdate) -> User:
@@ -116,6 +116,7 @@ def _open_invitations(db: Session, company_id: uuid.UUID):
 
 
 def create_invitation(db: Session, actor: User, payload: InvitationCreate) -> InvitationCreated:
+    entitlement_service.enforce_team_member_limit(db, actor.company_id)  # PLAT-031: plan limit, never for legacy companies
     email = payload.email.strip().lower()
     if payload.role == UserRole.SUPER_ADMIN and actor.role != UserRole.SUPER_ADMIN:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only a super admin can invite a super admin")

@@ -4,6 +4,7 @@ from app.api.v1 import (
     ai,
     audit,
     auth,
+    billing,
     boq,
     companies,
     daily_reports,
@@ -19,6 +20,7 @@ from app.api.v1 import (
     notifications,
     payments,
     platform,
+    platform_billing,
     platform_crm,
     platform_marketplace,
     procurement,
@@ -66,6 +68,8 @@ api_router.include_router(schedule.router)
 api_router.include_router(notifications.router)
 api_router.include_router(search.router)
 api_router.include_router(marketplace.router)
+api_router.include_router(billing.router)
 api_router.include_router(platform.router)
 api_router.include_router(platform_crm.router)
 api_router.include_router(platform_marketplace.router)
+api_router.include_router(platform_billing.router)

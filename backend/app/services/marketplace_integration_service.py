@@ -46,19 +46,21 @@ from app.schemas.marketplace_integration import (
 )
 from app.schemas.rfq import QuotationCreate
 from app.schemas.supplier import SupplierCreate
-from app.services import audit_service, platform_audit_service, procurement_service, rfq_service, supplier_service
+from app.services import audit_service, entitlement_service, platform_audit_service, procurement_service, rfq_service, supplier_service
 from app.services.material_service import get_material
 
 
 def ensure_marketplace_enabled(db: Session, company_id: uuid.UUID) -> None:
     """The single choke point every marketplace *action* (never a read of
     already-existing historical data) passes through. Disabled by default per
-    company (Phase 4.1 Task 4); a future subscription/entitlement check can be
-    added here without touching any call site."""
-    enabled = db.query(Company.marketplace_enabled).filter(Company.id == company_id).scalar()
-    if enabled is None:
+    company (Phase 4.1 Task 4). As of Phase 5, effective access also factors
+    in the subscription/legacy entitlement (entitlement_service) -- a single
+    combined check, so no two marketplace endpoints can ever disagree about
+    whether a company has access."""
+    operational_flag = db.query(Company.marketplace_enabled).filter(Company.id == company_id).scalar()
+    if operational_flag is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Company not found")
-    if not enabled:
+    if not entitlement_service.effective_marketplace_enabled(db, company_id, operational_flag):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "The marketplace isn't enabled for this company yet")
 
 

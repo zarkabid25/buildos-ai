@@ -164,3 +164,45 @@ class MarketplaceSupplierStatus(str, enum.Enum):
     VERIFIED = "verified"
     REJECTED = "rejected"
     SUSPENDED = "suspended"
+
+
+class BillingPeriod(str, enum.Enum):
+    MONTHLY = "monthly"
+    ANNUAL = "annual"
+
+
+class SubscriptionStatus(str, enum.Enum):
+    """A real state machine (PLAT-029), enforced in subscription_service, not
+    just a free-form status. TRIALING/ACTIVE/PENDING_PAYMENT/GRACE_PERIOD are
+    the "live" states -- a company has at most one subscription row in any of
+    these at a time, enforced at the database level (see CompanySubscription's
+    partial unique index), not only by an application check."""
+
+    TRIALING = "trialing"
+    ACTIVE = "active"
+    PENDING_PAYMENT = "pending_payment"
+    GRACE_PERIOD = "grace_period"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+
+
+LIVE_SUBSCRIPTION_STATUSES = (
+    SubscriptionStatus.TRIALING,
+    SubscriptionStatus.ACTIVE,
+    SubscriptionStatus.PENDING_PAYMENT,
+    SubscriptionStatus.GRACE_PERIOD,
+)
+
+
+class InvoiceStatus(str, enum.Enum):
+    DRAFT = "draft"
+    PENDING = "pending"
+    PAID = "paid"
+    REJECTED = "rejected"
+    VOID = "void"
+
+
+class PaymentSubmissionStatus(str, enum.Enum):
+    PENDING = "pending"
+    VERIFIED = "verified"
+    REJECTED = "rejected"

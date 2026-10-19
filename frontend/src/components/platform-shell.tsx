@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Building2, CalendarClock, LayoutGrid, ListChecks, Menu, Search, Target, Truck, Users2, Users, X } from "lucide-react";
+import { Building2, CalendarClock, CreditCard, LayoutGrid, ListChecks, Menu, Search, Tag, Target, Truck, Users2, Users, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,8 @@ const NAV_ITEMS = [
   { label: "Follow-ups", href: "/platform-admin/crm/follow-ups", icon: CalendarClock },
   { label: "Marketplace", href: "/platform-admin/marketplace", icon: Truck },
   { label: "Supplier Matching", href: "/platform-admin/marketplace/match", icon: Target },
+  { label: "Billing", href: "/platform-admin/billing", icon: CreditCard },
+  { label: "Plans", href: "/platform-admin/billing/plans", icon: Tag },
   { label: "Staff", href: "/platform-admin/staff", icon: Users },
   { label: "Audit Log", href: "/platform-admin/audit", icon: ListChecks },
 ];
@@ -78,7 +80,7 @@ export function PlatformShell({ children, breadcrumb }: { children: ReactNode; b
             // Sibling routes nested under another nav item's own href (e.g.
             // /crm/follow-ups, /marketplace/match) get their own nav entry, so
             // they must not also light up their parent's.
-            const siblingPrefixes = ["/platform-admin/crm/follow-ups", "/platform-admin/marketplace/match"];
+            const siblingPrefixes = ["/platform-admin/crm/follow-ups", "/platform-admin/marketplace/match", "/platform-admin/billing/plans"];
             const active =
               pathname === item.href ||
               (pathname.startsWith(`${item.href}/`) && !siblingPrefixes.some((p) => pathname.startsWith(p) && p !== item.href));

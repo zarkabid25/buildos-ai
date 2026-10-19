@@ -21,7 +21,7 @@ from app.schemas.marketplace_integration import (
     QuotationAttributionRead,
     UpdateConnectionRequest,
 )
-from app.services import marketplace_integration_service
+from app.services import entitlement_service, marketplace_integration_service
 
 router = APIRouter(prefix="/marketplace", tags=["marketplace"])
 
@@ -32,8 +32,9 @@ class MarketplaceStatus(BaseModel):
 
 @router.get("/status", response_model=MarketplaceStatus)
 def marketplace_status(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> MarketplaceStatus:
-    enabled = db.query(Company.marketplace_enabled).filter(Company.id == current_user.company_id).scalar()
-    return MarketplaceStatus(enabled=bool(enabled))
+    operational_flag = db.query(Company.marketplace_enabled).filter(Company.id == current_user.company_id).scalar()
+    enabled = entitlement_service.effective_marketplace_enabled(db, current_user.company_id, bool(operational_flag))
+    return MarketplaceStatus(enabled=enabled)
 
 
 @router.get("/suppliers", response_model=list[DiscoverySupplierRead])

@@ -154,6 +154,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
         </nav>
         <div className="border-t border-white/10 px-3 py-3">
+          <NavRow label="Billing" href="/billing" active={pathname === "/billing" || pathname.startsWith("/billing/")} />
           <NavRow label="Settings" href="/settings" active={pathname === "/settings"} />
         </div>
       </aside>

@@ -60,3 +60,13 @@ from app.models.marketplace_supplier import (  # noqa: F401
     MarketplaceDeliveryReport,
     MarketplaceQuotationAttribution,
 )
+from app.models.billing import (  # noqa: F401
+    SubscriptionPlan,
+    PlanPrice,
+    CompanySubscription,
+    SubscriptionInvoice,
+    InvoiceLineItem,
+    PaymentSubmission,
+    SubscriptionEvent,
+    CompanyLegacyEntitlement,
+)

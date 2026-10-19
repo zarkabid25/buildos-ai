@@ -224,7 +224,13 @@ Per `docs/design-system.md` (BuildOS AI 2.0 global UI/UX instructions). A separa
 - [x] Task 2: Platform Admin Matching UI (`/platform-admin/marketplace/match`: company → open RFQ → material → real matching suppliers with an Invite action; Linear/Attio/Stripe-styled per the platform admin theme)
 - [x] Task 3: Quotation audit attribution (`marketplace_quotation_attributions`, additive and insert-only; `Quotation.created_by_id` untouched and still correctly means "the RFQ's own creator"; a re-quote adds a new row rather than editing the old one)
 - [x] Task 4: Marketplace feature flag (`companies.marketplace_enabled`, disabled by default including every pre-existing company; owner/admin-only toggle; enforced server-side at every marketplace *action* endpoint; platform administration and historical records unaffected either way)
-- [ ] BUILD-149 Subscription management (needs a billing/plan model — no payment provider chosen yet)
+### Phase 5 — SaaS Subscriptions & Billing
+- [x] PLAT-028 Subscription plans and entitlements (`SubscriptionPlan`/`PlanPrice`, versioned pricing, configurable limits, never hardcoded in frontend)
+- [x] PLAT-029 Subscription lifecycle (`CompanySubscription`, explicit state machine, DB-level partial-unique-index guard against concurrent duplicate active subscriptions)
+- [x] PLAT-030 Invoices and manual payments (`SubscriptionInvoice`/`InvoiceLineItem`/`PaymentSubmission`, Decimal totals, private payment-proof storage, staff verify/reject, duplicate verification refused)
+- [x] PLAT-031 Renewal, grace period and access control (`SubscriptionEvent` history, backend-enforced entitlement guards on project/team-member creation, billing status surfaced on `/billing`)
+- [x] PLAT-032 Legacy company protection (`CompanyLegacyEntitlement`, data-migration-granted to every pre-Phase-5 company; `marketplace_enabled` flag preserved and untouched)
+- [x] BUILD-149 Subscription management (superseded by PLAT-028..032 above)
 - [ ] BUILD-150 Commission tracking (needs the marketplace order model)
 - [ ] BUILD-151 Payments and invoices (platform-level, i.e. BuildOS billing its own customers — distinct from the existing tenant-level `payments` module)
 - [ ] BUILD-152 Support tickets

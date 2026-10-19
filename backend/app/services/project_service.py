@@ -10,6 +10,7 @@ from app.db.updates import apply_changes
 from app.models.enums import ProjectStatus
 from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectHealth, ProjectSummary, ProjectUpdate
+from app.services import entitlement_service
 
 # A project is flagged "at risk" when it is active and the elapsed fraction of its
 # schedule is more than 15 percentage points ahead of its reported progress. This is
@@ -79,6 +80,7 @@ def _check_dates(project: Project) -> None:
 def create_project(
     db: Session, company_id: uuid.UUID, created_by_id: uuid.UUID, payload: ProjectCreate
 ) -> Project:
+    entitlement_service.enforce_project_limit(db, company_id)  # PLAT-031: plan limit, never for legacy companies
     exists = (
         db.query(Project)
         .filter(Project.company_id == company_id, Project.code == payload.code)
