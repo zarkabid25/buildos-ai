@@ -185,6 +185,48 @@ class EntitlementRead(BaseModel):
 # ---- PLAT-032: legacy entitlement review ---------------------------------------------------
 
 
+# ---- Phase 5.1: platform-admin reporting (directory, invoice list, revenue) ----------------
+
+
+class CompanyBillingSummaryRead(BaseModel):
+    company_id: uuid.UUID
+    company_name: str
+    plan_id: uuid.UUID | None
+    plan_name: str | None
+    status: str  # a real SubscriptionStatus value, or "legacy" / "none"
+    billing_period: BillingPeriod | None
+    trial_ends_at: datetime | None
+    current_period_end: datetime | None
+    grace_period_ends_at: datetime | None
+    is_legacy: bool
+
+
+class AdminInvoiceRead(InvoiceRead):
+    company_name: str | None = None
+
+
+class RevenueTrendPoint(BaseModel):
+    month: str  # "YYYY-MM"
+    amount: Decimal
+
+
+class PlanDistributionItem(BaseModel):
+    plan_name: str
+    count: int
+
+
+class RevenueDashboardRead(BaseModel):
+    revenue_collected: Decimal
+    outstanding_amount: Decimal
+    active_subscriptions: int
+    trialing_subscriptions: int
+    grace_period_subscriptions: int
+    expired_subscriptions: int
+    mrr: Decimal
+    monthly_trend: list[RevenueTrendPoint]
+    plan_distribution: list[PlanDistributionItem]
+
+
 class LegacyEntitlementRead(BaseModel):
     id: uuid.UUID
     company_id: uuid.UUID

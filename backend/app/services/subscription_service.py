@@ -11,11 +11,12 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.billing import CompanySubscription, SubscriptionEvent
+from app.models.billing import CompanyLegacyEntitlement, CompanySubscription, SubscriptionEvent
+from app.models.company import Company
 from app.models.enums import LIVE_SUBSCRIPTION_STATUSES, SubscriptionStatus
 from app.models.platform_admin import PlatformAdmin
 from app.models.user import User
-from app.schemas.billing import PlanChangeRequest, SubscriptionCreate, SubscriptionEventRead, SubscriptionRead
+from app.schemas.billing import CompanyBillingSummaryRead, PlanChangeRequest, SubscriptionCreate, SubscriptionEventRead, SubscriptionRead
 from app.services import audit_service, platform_audit_service, subscription_plan_service
 
 _ALLOWED_TRANSITIONS: dict[SubscriptionStatus, set[SubscriptionStatus]] = {
@@ -189,6 +190,75 @@ def expire_subscription(db: Session, company_id: uuid.UUID, subscription_id: uui
     db.commit()
     db.refresh(sub)
     return _read(sub)
+
+
+def record_renewal_invoice_requested(db: Session, sub: CompanySubscription, actor_user: User) -> None:
+    """Logged by the company-facing renewal endpoint (app/api/v1/billing.py)
+    whenever a renewal invoice is actually generated -- not on a repeated
+    request that found an existing pending one, so the history never implies
+    more renewal attempts happened than really did."""
+    _record_event(db, sub, "subscription.renewal_invoice_requested", sub.status, sub.status, "Renewal invoice generated", actor_user=actor_user)
+
+
+def _billing_summary(company: Company, sub: CompanySubscription | None, is_legacy: bool) -> CompanyBillingSummaryRead:
+    return CompanyBillingSummaryRead(
+        company_id=company.id,
+        company_name=company.name,
+        plan_id=sub.plan_id if sub else None,
+        plan_name=sub.plan.name if sub else None,
+        status=sub.status.value if sub else ("legacy" if is_legacy else "none"),
+        billing_period=sub.billing_period if sub else None,
+        trial_ends_at=sub.trial_ends_at if sub else None,
+        current_period_end=sub.current_period_end if sub else None,
+        grace_period_ends_at=sub.grace_period_ends_at if sub else None,
+        is_legacy=is_legacy,
+    )
+
+
+def _latest_subscription_for_company(db: Session, company_id: uuid.UUID) -> CompanySubscription | None:
+    sub = get_live_subscription(db, company_id)
+    if sub:
+        return sub
+    # No live subscription -- fall back to the most recent historical one
+    # (cancelled/expired), purely for display; it is never treated as live.
+    return db.query(CompanySubscription).filter(CompanySubscription.company_id == company_id).order_by(CompanySubscription.created_at.desc()).first()
+
+
+def get_company_billing_summary(db: Session, company_id: uuid.UUID) -> CompanyBillingSummaryRead:
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Company not found")
+    is_legacy = (
+        db.query(CompanyLegacyEntitlement)
+        .filter(CompanyLegacyEntitlement.company_id == company_id, CompanyLegacyEntitlement.revoked_at.is_(None))
+        .first()
+        is not None
+    )
+    return _billing_summary(company, _latest_subscription_for_company(db, company_id), is_legacy)
+
+
+def list_billing_companies(db: Session, search: str | None = None, plan_id: uuid.UUID | None = None, status_filter: str | None = None) -> list[CompanyBillingSummaryRead]:
+    """Company directory for the platform-admin billing screens (Task 1).
+    Reads existing subscription rows -- no new lifecycle logic. A company
+    with no subscription history at all is correctly labelled "legacy" or
+    "none", never silently omitted, so staff can see every company."""
+    query = db.query(Company)
+    if search:
+        query = query.filter(Company.name.ilike(f"%{search}%"))
+    companies = query.order_by(Company.name.asc()).all()
+    legacy_ids = {row[0] for row in db.query(CompanyLegacyEntitlement.company_id).filter(CompanyLegacyEntitlement.revoked_at.is_(None)).all()}
+
+    results: list[CompanyBillingSummaryRead] = []
+    for company in companies:
+        sub = _latest_subscription_for_company(db, company.id)
+        is_legacy = company.id in legacy_ids
+        summary = _billing_summary(company, sub, is_legacy)
+        if status_filter and summary.status != status_filter:
+            continue
+        if plan_id and (not sub or sub.plan_id != plan_id):
+            continue
+        results.append(summary)
+    return results
 
 
 def list_events(db: Session, company_id: uuid.UUID, subscription_id: uuid.UUID | None = None) -> list[SubscriptionEventRead]:

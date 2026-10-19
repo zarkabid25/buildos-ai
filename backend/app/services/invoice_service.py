@@ -8,7 +8,7 @@ REJECTED is terminal), which is what prevents duplicate verification and a
 second, accidental activation of the same subscription."""
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import HTTPException, UploadFile, status
@@ -16,10 +16,11 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.storage import DOCUMENT_TYPES, save_upload
 from app.models.billing import InvoiceLineItem, PaymentSubmission, SubscriptionInvoice
+from app.models.company import Company
 from app.models.enums import InvoiceStatus, PaymentSubmissionStatus
 from app.models.platform_admin import PlatformAdmin
 from app.models.user import User
-from app.schemas.billing import InvoiceLineItemRead, InvoiceRead, PaymentSubmissionRead
+from app.schemas.billing import AdminInvoiceRead, InvoiceLineItemRead, InvoiceRead, PaymentSubmissionRead
 from app.services import audit_service, platform_audit_service, subscription_service
 
 
@@ -129,6 +130,53 @@ def list_invoices(db: Session, company_id: uuid.UUID) -> list[InvoiceRead]:
 def get_invoice(db: Session, company_id: uuid.UUID, invoice_id: uuid.UUID) -> InvoiceRead:
     invoice = _get(db, company_id, invoice_id)
     return _read(invoice, _get_staff_names(db, invoice))
+
+
+def to_read(db: Session, invoice: SubscriptionInvoice) -> InvoiceRead:
+    """Public wrapper around the private `_read` builder, for callers outside
+    this module that already hold a real invoice row (e.g. the company-facing
+    renewal endpoint in app/api/v1/billing.py)."""
+    return _read(invoice, _get_staff_names(db, invoice))
+
+
+def get_pending_invoice_for_subscription(db: Session, subscription_id: uuid.UUID) -> SubscriptionInvoice | None:
+    """Used by the renewal endpoint to stay idempotent: if a subscription
+    already has an unpaid invoice outstanding, a repeated renewal request
+    must return that same invoice rather than generating a duplicate."""
+    return (
+        db.query(SubscriptionInvoice)
+        .options(selectinload(SubscriptionInvoice.items), selectinload(SubscriptionInvoice.payments))
+        .filter(SubscriptionInvoice.subscription_id == subscription_id, SubscriptionInvoice.status == InvoiceStatus.PENDING)
+        .order_by(SubscriptionInvoice.created_at.desc())
+        .first()
+    )
+
+
+def list_all_invoices(
+    db: Session,
+    company_id: uuid.UUID | None = None,
+    status_filter: InvoiceStatus | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> list[AdminInvoiceRead]:
+    """Platform-wide invoice list for the admin billing screens (Task 2) --
+    same rows list_invoices reads, just not scoped to one company, with real
+    server-side filters instead of a frontend doing it with everything."""
+    query = (
+        db.query(SubscriptionInvoice, Company.name)
+        .join(Company, Company.id == SubscriptionInvoice.company_id)
+        .options(selectinload(SubscriptionInvoice.items), selectinload(SubscriptionInvoice.payments))
+    )
+    if company_id:
+        query = query.filter(SubscriptionInvoice.company_id == company_id)
+    if status_filter:
+        query = query.filter(SubscriptionInvoice.status == status_filter)
+    if date_from:
+        query = query.filter(SubscriptionInvoice.created_at >= date_from)
+    if date_to:
+        query = query.filter(SubscriptionInvoice.created_at < date_to + timedelta(days=1))
+    rows = query.order_by(SubscriptionInvoice.created_at.desc()).all()
+    return [AdminInvoiceRead(**_read(invoice, _get_staff_names(db, invoice)).model_dump(), company_name=company_name) for invoice, company_name in rows]
 
 
 async def submit_payment(

@@ -231,6 +231,14 @@ Per `docs/design-system.md` (BuildOS AI 2.0 global UI/UX instructions). A separa
 - [x] PLAT-031 Renewal, grace period and access control (`SubscriptionEvent` history, backend-enforced entitlement guards on project/team-member creation, billing status surfaced on `/billing`)
 - [x] PLAT-032 Legacy company protection (`CompanyLegacyEntitlement`, data-migration-granted to every pre-Phase-5 company; `marketplace_enabled` flag preserved and untouched)
 - [x] BUILD-149 Subscription management (superseded by PLAT-028..032 above)
+
+### Phase 5.1 — Complete Billing Operations UI
+- [x] Task 1: Company Subscriptions (`/platform-admin/billing/subscriptions` directory with search/plan/status filters; `[companyId]` detail with plan history, legacy-entitlement indicator, activity timeline, and grace-period/expire actions)
+- [x] Task 2: Invoice Management (`/platform-admin/billing/invoices`: platform-wide list, company/status/date filters, inline line-items and payment history)
+- [x] Task 3: Revenue Dashboard (`/platform-admin/billing/revenue`: MRR computed from ACTIVE subscriptions only, cash collected, outstanding balance, monthly trend from real paid invoices, plan distribution)
+- [x] Task 4: Subscription Activity History (rendered on the company detail page from real `SubscriptionEvent` rows; no fabricated events)
+- [x] Task 5: Company Renewal UI (`/billing` "Request renewal invoice" action; idempotent `POST /billing/subscriptions/{id}/renew`, verified to never create a duplicate invoice on repeated requests)
+- [x] Task 6: Financial and compatibility tests (+8 in `test_billing_http.py`: directory/filter coverage, new companies never auto-grandfathered, MRR excludes non-active subscriptions, renewal idempotency before and after activation)
 - [ ] BUILD-150 Commission tracking (needs the marketplace order model)
 - [ ] BUILD-151 Payments and invoices (platform-level, i.e. BuildOS billing its own customers — distinct from the existing tenant-level `payments` module)
 - [ ] BUILD-152 Support tickets

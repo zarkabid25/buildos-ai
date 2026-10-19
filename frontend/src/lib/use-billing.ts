@@ -61,6 +61,19 @@ export function useCancelSubscription(subscriptionId: string) {
   });
 }
 
+export function useRenewSubscription(subscriptionId: string) {
+  const { accessToken } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { inlineError: true },
+    mutationFn: () => api.post<Invoice>(`/billing/subscriptions/${subscriptionId}/renew`, {}, accessToken ?? undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["billing-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["billing-events", subscriptionId] });
+    },
+  });
+}
+
 export function useSubscriptionEvents(subscriptionId: string | undefined) {
   const { accessToken } = useAuth();
   return useQuery({

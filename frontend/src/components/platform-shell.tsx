@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Building2, CalendarClock, CreditCard, LayoutGrid, ListChecks, Menu, Search, Tag, Target, Truck, Users2, Users, X } from "lucide-react";
+import { BarChart3, Building2, CalendarClock, CreditCard, FileText, LayoutGrid, ListChecks, Menu, Search, Tag, Target, Truck, Users2, Users, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,9 @@ const NAV_ITEMS = [
   { label: "Supplier Matching", href: "/platform-admin/marketplace/match", icon: Target },
   { label: "Billing", href: "/platform-admin/billing", icon: CreditCard },
   { label: "Plans", href: "/platform-admin/billing/plans", icon: Tag },
+  { label: "Subscriptions", href: "/platform-admin/billing/subscriptions", icon: Users2 },
+  { label: "Invoices", href: "/platform-admin/billing/invoices", icon: FileText },
+  { label: "Revenue", href: "/platform-admin/billing/revenue", icon: BarChart3 },
   { label: "Staff", href: "/platform-admin/staff", icon: Users },
   { label: "Audit Log", href: "/platform-admin/audit", icon: ListChecks },
 ];
@@ -80,7 +83,14 @@ export function PlatformShell({ children, breadcrumb }: { children: ReactNode; b
             // Sibling routes nested under another nav item's own href (e.g.
             // /crm/follow-ups, /marketplace/match) get their own nav entry, so
             // they must not also light up their parent's.
-            const siblingPrefixes = ["/platform-admin/crm/follow-ups", "/platform-admin/marketplace/match", "/platform-admin/billing/plans"];
+            const siblingPrefixes = [
+              "/platform-admin/crm/follow-ups",
+              "/platform-admin/marketplace/match",
+              "/platform-admin/billing/plans",
+              "/platform-admin/billing/subscriptions",
+              "/platform-admin/billing/invoices",
+              "/platform-admin/billing/revenue",
+            ];
             const active =
               pathname === item.href ||
               (pathname.startsWith(`${item.href}/`) && !siblingPrefixes.some((p) => pathname.startsWith(p) && p !== item.href));

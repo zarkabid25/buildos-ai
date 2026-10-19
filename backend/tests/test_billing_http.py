@@ -396,3 +396,163 @@ def test_billing_overview_dashboard(client, auth_a):
     res = client.get("/api/v1/platform/billing/overview", headers=staff)
     assert res.status_code == 200
     assert res.json()["trialing_subscriptions"] >= 1
+
+
+# ---- Phase 5.1: company subscriptions directory and detail (Task 1) ----------------------------
+
+
+def test_company_billing_directory_search_and_filter(client, auth_a):
+    staff = owner_headers(client, email="billing-staff26@buildos.ai")
+    plan = create_plan(client, staff, name="Directory Plan", trial_days=7, monthly=Decimal("25"))
+    client.post("/api/v1/billing/subscriptions", json={"plan_id": plan["id"], "billing_period": "monthly", "currency": "USD"}, headers=auth_a)
+    company_id = client.get("/api/v1/auth/me", headers=auth_a).json()["company_id"]
+
+    res = client.get("/api/v1/platform/billing/companies", headers=staff)
+    assert res.status_code == 200
+    row = next(r for r in res.json() if r["company_id"] == company_id)
+    assert row["plan_name"] == "Directory Plan"
+    assert row["status"] == "trialing"
+
+    res = client.get("/api/v1/platform/billing/companies", params={"search": "Company AAA"}, headers=staff)
+    assert any(r["company_id"] == company_id for r in res.json())
+    res = client.get("/api/v1/platform/billing/companies", params={"search": "No Such Company"}, headers=staff)
+    assert res.json() == []
+
+    res = client.get("/api/v1/platform/billing/companies", params={"plan_id": plan["id"]}, headers=staff)
+    assert all(r["plan_id"] == plan["id"] for r in res.json())
+    res = client.get("/api/v1/platform/billing/companies", params={"status": "trialing"}, headers=staff)
+    assert all(r["status"] == "trialing" for r in res.json())
+
+
+def test_company_billing_summary_detail_view(client, auth_a):
+    staff = owner_headers(client, email="billing-staff27@buildos.ai")
+    plan = create_plan(client, staff, name="Detail Plan", trial_days=7)
+    client.post("/api/v1/billing/subscriptions", json={"plan_id": plan["id"], "billing_period": "monthly", "currency": "USD"}, headers=auth_a)
+    company_id = client.get("/api/v1/auth/me", headers=auth_a).json()["company_id"]
+
+    res = client.get(f"/api/v1/platform/billing/companies/{company_id}/summary", headers=staff)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["plan_name"] == "Detail Plan"
+    assert body["is_legacy"] is False
+
+    res = client.get(f"/api/v1/platform/billing/companies/{company_id}/subscriptions", headers=staff)
+    assert len(res.json()) == 1
+    res = client.get(f"/api/v1/platform/billing/companies/{company_id}/events", headers=staff)
+    assert any(e["event_type"] == "subscription.created" for e in res.json())
+
+
+def test_a_company_with_no_subscription_shows_up_as_none_in_the_directory(client, auth_a):
+    """PLAT-032 compatibility: a plain company shouldn't vanish from the
+    staff directory just because it never subscribed to anything."""
+    staff = owner_headers(client, email="billing-staff28@buildos.ai")
+    company_id = client.get("/api/v1/auth/me", headers=auth_a).json()["company_id"]
+    res = client.get(f"/api/v1/platform/billing/companies/{company_id}/summary", headers=staff)
+    assert res.json()["status"] == "none"
+    assert res.json()["is_legacy"] is False
+
+
+def test_new_companies_are_not_automatically_grandfathered(client, auth_a):
+    """The explicit requirement from the Phase 5.1 brief: grandfathering is a
+    one-time data migration against companies that already existed, never
+    something a fresh registration gets for free."""
+    staff = owner_headers(client, email="billing-staff29@buildos.ai")
+    company_id = client.get("/api/v1/auth/me", headers=auth_a).json()["company_id"]
+    res = client.get("/api/v1/platform/billing/legacy-entitlements", headers=staff)
+    assert not any(e["company_id"] == company_id for e in res.json())
+
+
+# ---- Phase 5.1: platform-wide invoice management (Task 2) --------------------------------------
+
+
+def test_platform_wide_invoice_list_filters_by_company_and_status(client, auth_a, auth_b):
+    staff = owner_headers(client, email="billing-staff30@buildos.ai")
+    plan_a = create_plan(client, staff, name="Invoices A", trial_days=0, monthly=Decimal("10"))
+    plan_b = create_plan(client, staff, name="Invoices B", trial_days=0, monthly=Decimal("20"))
+    client.post("/api/v1/billing/subscriptions", json={"plan_id": plan_a["id"], "billing_period": "monthly", "currency": "USD"}, headers=auth_a)
+    client.post("/api/v1/billing/subscriptions", json={"plan_id": plan_b["id"], "billing_period": "monthly", "currency": "USD"}, headers=auth_b)
+    company_a = client.get("/api/v1/auth/me", headers=auth_a).json()["company_id"]
+
+    res = client.get("/api/v1/platform/billing/invoices", headers=staff)
+    assert res.status_code == 200
+    assert len(res.json()) >= 2
+    assert all("company_name" in inv for inv in res.json())
+
+    res = client.get("/api/v1/platform/billing/invoices", params={"company_id": company_a}, headers=staff)
+    assert all(inv["company_id"] == company_a for inv in res.json())
+    assert len(res.json()) == 1
+
+    res = client.get("/api/v1/platform/billing/invoices", params={"status": "pending"}, headers=staff)
+    assert all(inv["status"] == "pending" for inv in res.json())
+    assert len(res.json()) >= 2
+
+
+# ---- Phase 5.1: revenue dashboard (Task 3) ------------------------------------------------------
+
+
+def test_revenue_dashboard_calculates_mrr_from_active_subscriptions_not_payment_totals(client):
+    staff = owner_headers(client, email="billing-staff31@buildos.ai")
+    headers, invoice = _subscribed_company(client, staff, Decimal("99"))
+
+    # Still pending payment -- not active yet, so it must not count toward MRR.
+    res = client.get("/api/v1/platform/billing/revenue", headers=staff)
+    before = next((p["count"] for p in res.json()["plan_distribution"] if p["plan_name"].startswith("PayPlan")), 0)
+    assert before >= 1  # counted in plan distribution (a live subscription)
+
+    client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/payments", data={"amount": "99"},
+        files={"file": ("proof.pdf", io.BytesIO(b"%PDF-1.4\nmock"), "application/pdf")}, headers=headers,
+    )
+    submission_id = client.get("/api/v1/platform/billing/payments/pending", headers=staff).json()[-1]["id"]
+    client.post(f"/api/v1/platform/billing/payments/{submission_id}/verify", headers=staff)
+
+    res = client.get("/api/v1/platform/billing/revenue", headers=staff)
+    body = res.json()
+    assert Decimal(body["mrr"]) >= Decimal("99")  # now active, so it IS recognized MRR
+    assert Decimal(body["revenue_collected"]) >= Decimal("99")  # and a real cash receipt
+    assert any(point["amount"] for point in body["monthly_trend"])
+
+
+# ---- Phase 5.1: company renewal flow (Task 5) ---------------------------------------------------
+
+
+def test_renewal_invoice_is_idempotent_on_repeated_requests(client):
+    staff = owner_headers(client, email="billing-staff32@buildos.ai")
+    headers, invoice = _subscribed_company(client, staff, Decimal("77"))
+    sub = client.get("/api/v1/billing/subscription", headers=headers).json()
+
+    # Still pending_payment, which is a valid state to (re-)request the same
+    # invoice from -- this must return the SAME invoice, not create a second one.
+    res1 = client.post(f"/api/v1/billing/subscriptions/{sub['id']}/renew", headers=headers)
+    assert res1.status_code == 200
+    res2 = client.post(f"/api/v1/billing/subscriptions/{sub['id']}/renew", headers=headers)
+    assert res2.status_code == 200
+    assert res1.json()["id"] == res2.json()["id"]
+
+    all_invoices = client.get("/api/v1/billing/invoices", headers=headers).json()
+    assert len(all_invoices) == 1  # no duplicate created
+
+
+def test_renewal_after_activation_generates_a_fresh_invoice_and_is_logged(client):
+    staff = owner_headers(client, email="billing-staff33@buildos.ai")
+    headers, invoice = _subscribed_company(client, staff, Decimal("55"))
+    client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/payments", data={"amount": "55"},
+        files={"file": ("proof.pdf", io.BytesIO(b"%PDF-1.4\nmock"), "application/pdf")}, headers=headers,
+    )
+    submission_id = client.get("/api/v1/platform/billing/payments/pending", headers=staff).json()[-1]["id"]
+    client.post(f"/api/v1/platform/billing/payments/{submission_id}/verify", headers=staff)
+
+    sub = client.get("/api/v1/billing/subscription", headers=headers).json()
+    assert sub["status"] == "active"
+    res = client.post(f"/api/v1/billing/subscriptions/{sub['id']}/renew", headers=headers)
+    assert res.status_code == 200
+    renewal_invoice = res.json()
+    assert renewal_invoice["id"] != invoice["id"]  # a real second invoice for the next period
+
+    events = client.get(f"/api/v1/billing/subscriptions/{sub['id']}/events", headers=headers).json()
+    assert any(e["event_type"] == "subscription.renewal_invoice_requested" for e in events)
+
+    # Asking again before paying the renewal invoice must not create a third one.
+    res2 = client.post(f"/api/v1/billing/subscriptions/{sub['id']}/renew", headers=headers)
+    assert res2.json()["id"] == renewal_invoice["id"]

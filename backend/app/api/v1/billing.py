@@ -2,13 +2,14 @@ import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Form, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_roles
 from app.core.storage import resolve_path
 from app.db.session import get_db
+from app.models.billing import PlanPrice
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.billing import (
@@ -67,6 +68,38 @@ def change_plan(subscription_id: uuid.UUID, payload: PlanChangeRequest, db: Sess
 @router.post("/subscriptions/{subscription_id}/cancel", response_model=SubscriptionRead)
 def cancel_subscription(subscription_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(require_roles(*CAN_MANAGE_BILLING))) -> SubscriptionRead:
     return subscription_service.cancel_subscription(db, current_user.company_id, current_user, subscription_id)
+
+
+@router.post("/subscriptions/{subscription_id}/renew", response_model=InvoiceRead)
+def renew_subscription(subscription_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(require_roles(*CAN_MANAGE_BILLING))) -> InvoiceRead:
+    """Company-initiated renewal (Phase 5.1 Task 5). Idempotent by design: if
+    this subscription already has an unpaid invoice outstanding, that same
+    invoice is returned rather than generating a second one -- a user
+    double-clicking "Renew" (or retrying a failed request) never produces a
+    duplicate invoice."""
+    sub = subscription_service.get_subscription(db, current_user.company_id, subscription_id)
+    if sub.status.value not in ("active", "grace_period", "pending_payment"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Can't renew a subscription that is {sub.status.value}")
+
+    existing = invoice_service.get_pending_invoice_for_subscription(db, sub.id)
+    if existing:
+        return invoice_service.to_read(db, existing)
+
+    plan = subscription_plan_service.get_plan_model(db, sub.plan_id)
+    # The subscription's own original price row, so renewal always charges
+    # the currency it was actually bought in -- not a guessed default.
+    original_price = db.query(PlanPrice).filter(PlanPrice.id == sub.plan_price_id).first() if sub.plan_price_id else None
+    price = subscription_plan_service.get_current_price(db, sub.plan_id, original_price.currency if original_price else "USD", sub.billing_period)
+    period_start = sub.current_period_end.date() if sub.current_period_end else date.today()
+    period_days = 365 if sub.billing_period.value == "annual" else 30
+    invoice = invoice_service.generate_subscription_invoice(
+        db, current_user.company_id, sub.id, plan.name, price.currency, price.amount,
+        period_start, period_start + timedelta(days=period_days), period_start + timedelta(days=7),
+    )
+    subscription_service.record_renewal_invoice_requested(db, sub, current_user)
+    db.commit()
+    db.refresh(invoice)
+    return invoice_service.to_read(db, invoice)
 
 
 @router.get("/subscriptions/{subscription_id}/events", response_model=list[SubscriptionEventRead])

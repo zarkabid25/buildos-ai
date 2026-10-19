@@ -131,3 +131,42 @@ export interface BillingOverview {
   pending_payments: number;
   total_revenue_collected: string;
 }
+
+export interface CompanyBillingSummary {
+  company_id: string;
+  company_name: string;
+  plan_id: string | null;
+  plan_name: string | null;
+  status: string; // a real SubscriptionStatus value, or "legacy" / "none"
+  billing_period: BillingPeriod | null;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  grace_period_ends_at: string | null;
+  is_legacy: boolean;
+}
+
+export interface AdminInvoice extends Invoice {
+  company_name: string | null;
+}
+
+export interface RevenueTrendPoint {
+  month: string;
+  amount: string;
+}
+
+export interface PlanDistributionItem {
+  plan_name: string;
+  count: number;
+}
+
+export interface RevenueDashboard {
+  revenue_collected: string;
+  outstanding_amount: string;
+  active_subscriptions: number;
+  trialing_subscriptions: number;
+  grace_period_subscriptions: number;
+  expired_subscriptions: number;
+  mrr: string;
+  monthly_trend: RevenueTrendPoint[];
+  plan_distribution: PlanDistributionItem[];
+}

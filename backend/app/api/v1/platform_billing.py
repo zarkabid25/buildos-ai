@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
@@ -7,16 +8,21 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_platform_admin, require_platform_roles
 from app.db.session import get_db
-from app.models.billing import CompanyLegacyEntitlement, CompanySubscription, SubscriptionInvoice
+from app.models.billing import CompanyLegacyEntitlement, CompanySubscription, PlanPrice, SubscriptionInvoice
 from app.models.company import Company
-from app.models.enums import InvoiceStatus, PlatformStaffRole
+from app.models.enums import BillingPeriod, InvoiceStatus, LIVE_SUBSCRIPTION_STATUSES, PlatformStaffRole, SubscriptionStatus
 from app.models.platform_admin import PlatformAdmin
 from app.schemas.billing import (
+    AdminInvoiceRead,
+    CompanyBillingSummaryRead,
     InvoiceRead,
     LegacyEntitlementRead,
     PaymentSubmissionRead,
+    PlanDistributionItem,
     PlanPriceCreate,
     RejectPaymentRequest,
+    RevenueDashboardRead,
+    RevenueTrendPoint,
     SubscriptionEventRead,
     SubscriptionPlanCreate,
     SubscriptionPlanRead,
@@ -60,6 +66,25 @@ def set_price(plan_id: uuid.UUID, payload: PlanPriceCreate, db: Session = Depend
     return subscription_plan_service.set_price(db, admin, plan_id, payload)
 
 
+# ---- Phase 5.1 Task 1: company subscription directory and detail ---------------------------
+
+
+@router.get("/companies", response_model=list[CompanyBillingSummaryRead])
+def billing_companies(
+    search: str | None = None,
+    plan_id: uuid.UUID | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+    _admin: PlatformAdmin = Depends(get_current_platform_admin),
+) -> list[CompanyBillingSummaryRead]:
+    return subscription_service.list_billing_companies(db, search, plan_id, status)
+
+
+@router.get("/companies/{company_id}/summary", response_model=CompanyBillingSummaryRead)
+def company_billing_summary(company_id: uuid.UUID, db: Session = Depends(get_db), _admin: PlatformAdmin = Depends(get_current_platform_admin)) -> CompanyBillingSummaryRead:
+    return subscription_service.get_company_billing_summary(db, company_id)
+
+
 # ---- PLAT-029: subscriptions, viewed/managed by staff ---------------------------------------
 
 
@@ -89,6 +114,21 @@ def company_subscription_events(company_id: uuid.UUID, db: Session = Depends(get
 @router.get("/companies/{company_id}/invoices", response_model=list[InvoiceRead])
 def list_company_invoices(company_id: uuid.UUID, db: Session = Depends(get_db), _admin: PlatformAdmin = Depends(get_current_platform_admin)) -> list[InvoiceRead]:
     return invoice_service.list_invoices(db, company_id)
+
+
+# ---- Phase 5.1 Task 2: platform-wide invoice management --------------------------------------
+
+
+@router.get("/invoices", response_model=list[AdminInvoiceRead])
+def billing_invoices(
+    company_id: uuid.UUID | None = None,
+    status: InvoiceStatus | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
+    _admin: PlatformAdmin = Depends(get_current_platform_admin),
+) -> list[AdminInvoiceRead]:
+    return invoice_service.list_all_invoices(db, company_id, status, date_from, date_to)
 
 
 @router.get("/payments/pending", response_model=list[PaymentSubmissionRead])
@@ -123,6 +163,60 @@ def billing_overview(db: Session = Depends(get_db), _admin: PlatformAdmin = Depe
         "pending_payments": pending_payments_count,
         "total_revenue_collected": str(paid_total),
     }
+
+
+# ---- Phase 5.1 Task 3: revenue dashboard -----------------------------------------------------
+
+
+@router.get("/revenue", response_model=RevenueDashboardRead)
+def billing_revenue(db: Session = Depends(get_db), _admin: PlatformAdmin = Depends(get_current_platform_admin)) -> RevenueDashboardRead:
+    revenue_collected = db.query(func.coalesce(func.sum(SubscriptionInvoice.total_amount), 0)).filter(SubscriptionInvoice.status == InvoiceStatus.PAID).scalar() or Decimal("0")
+    outstanding_amount = db.query(func.coalesce(func.sum(SubscriptionInvoice.total_amount), 0)).filter(SubscriptionInvoice.status == InvoiceStatus.PENDING).scalar() or Decimal("0")
+    expired_count = db.query(func.count(CompanySubscription.id)).filter(CompanySubscription.status == SubscriptionStatus.EXPIRED).scalar() or 0
+
+    live_subs = db.query(CompanySubscription).filter(CompanySubscription.status.in_(LIVE_SUBSCRIPTION_STATUSES)).all()
+    active_count = sum(1 for s in live_subs if s.status == SubscriptionStatus.ACTIVE)
+    trialing_count = sum(1 for s in live_subs if s.status == SubscriptionStatus.TRIALING)
+    grace_count = sum(1 for s in live_subs if s.status == SubscriptionStatus.GRACE_PERIOD)
+
+    # MRR only counts subscriptions that are actually ACTIVE (paying right
+    # now) -- a trial or an overdue grace-period subscription isn't
+    # recognized revenue yet, which is why this is never just "sum of
+    # payments received".
+    mrr = Decimal("0")
+    plan_counts: dict[str, int] = {}
+    for sub in live_subs:
+        plan_counts[sub.plan.name] = plan_counts.get(sub.plan.name, 0) + 1
+        if sub.status == SubscriptionStatus.ACTIVE and sub.plan_price_id:
+            price = db.query(PlanPrice).filter(PlanPrice.id == sub.plan_price_id).first()
+            if price:
+                mrr += price.amount if sub.billing_period == BillingPeriod.MONTHLY else (price.amount / Decimal("12"))
+    mrr = mrr.quantize(Decimal("0.01"))
+
+    # Monthly trend is built from real paid invoices only, grouped in Python
+    # (not a DB-specific date_trunc) so it behaves identically on SQLite
+    # (tests) and Postgres (dev/prod) -- never a placeholder series.
+    paid_rows = (
+        db.query(SubscriptionInvoice.paid_at, SubscriptionInvoice.total_amount)
+        .filter(SubscriptionInvoice.status == InvoiceStatus.PAID, SubscriptionInvoice.paid_at.isnot(None))
+        .all()
+    )
+    trend_map: dict[str, Decimal] = {}
+    for paid_at, amount in paid_rows:
+        key = paid_at.strftime("%Y-%m")
+        trend_map[key] = trend_map.get(key, Decimal("0")) + amount
+
+    return RevenueDashboardRead(
+        revenue_collected=Decimal(str(revenue_collected)),
+        outstanding_amount=Decimal(str(outstanding_amount)),
+        active_subscriptions=active_count,
+        trialing_subscriptions=trialing_count,
+        grace_period_subscriptions=grace_count,
+        expired_subscriptions=expired_count,
+        mrr=mrr,
+        monthly_trend=[RevenueTrendPoint(month=k, amount=v) for k, v in sorted(trend_map.items())],
+        plan_distribution=[PlanDistributionItem(plan_name=k, count=v) for k, v in sorted(plan_counts.items())],
+    )
 
 
 # ---- PLAT-032: legacy entitlement review ------------------------------------------------------

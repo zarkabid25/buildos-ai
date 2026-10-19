@@ -21,6 +21,7 @@ import {
   useCurrentSubscription,
   useEntitlements,
   useInvoices,
+  useRenewSubscription,
 } from "@/lib/use-billing";
 import { attempt } from "@/lib/utils";
 
@@ -48,6 +49,7 @@ export default function BillingPage() {
   const createSub = useCreateSubscription();
   const changePlan = useChangePlan(subQuery.data?.id ?? "");
   const cancelSub = useCancelSubscription(subQuery.data?.id ?? "");
+  const renewSub = useRenewSubscription(subQuery.data?.id ?? "");
   const [period, setPeriod] = useState<BillingPeriod>("monthly");
 
   useEffect(() => {
@@ -77,8 +79,19 @@ export default function BillingPage() {
     }
   }
 
+  async function handleRenew() {
+    try {
+      const invoice = await renewSub.mutateAsync();
+      toast(`Renewal invoice ${invoice.invoice_number} ready -- submit payment proof when you're set.`, "success");
+      router.push(`/billing/invoices/${invoice.id}`);
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Something went wrong.", "error");
+    }
+  }
+
   const sub = subQuery.data;
   const ent = entitlementsQuery.data;
+  const canRenew = sub && ["active", "grace_period", "pending_payment"].includes(sub.status);
 
   return (
     <AppShell>
@@ -103,6 +116,11 @@ export default function BillingPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_CLASSES[sub.status] ?? ""}`}>{sub.status.replace("_", " ")}</span>
+                {canManage && canRenew && (
+                  <Button variant="secondary" disabled={renewSub.isPending} onClick={handleRenew}>
+                    {renewSub.isPending ? "Requesting..." : "Request renewal invoice"}
+                  </Button>
+                )}
                 {canManage && sub.status !== "cancelled" && sub.status !== "expired" && (
                   <Button variant="ghost" className="text-muted hover:text-danger" onClick={handleCancel}>
                     Cancel
