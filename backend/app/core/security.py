@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from jose import JWTError, jwt
 
 from app.core.config import get_settings
-from app.core.token_store import bump_session_version, get_session_version, is_jti_revoked, revoke_jti
+from app.core.token_store import bump_session_version, claim_jti, get_session_version, revoke_jti
 
 settings = get_settings()
 
@@ -114,25 +114,26 @@ def decode_token(token: str) -> dict[str, Any] | None:
 
 
 def rotate_refresh_or_reject(payload: dict[str, Any], token_type: str) -> None:
-    """Phase 9.1 (Task 1): called by every refresh() service right after
-    decoding a presented refresh token. Enforces single-use rotation: a
-    refresh token that's already been consumed once (its jti is on the
-    denylist) means either normal re-use of an old browser tab/stale client,
-    or a stolen token being replayed -- either way it's treated as a
-    reuse attack and the ENTIRE session is revoked (every token for this
-    subject, not just this one), matching standard refresh-rotation
-    guidance. A still-valid, not-yet-used refresh token is consumed here
-    (revoked) so it can't be replayed once the caller mints its replacement."""
+    """Phase 9.1 (Task 1; made race-safe in Phase 10): called by every
+    refresh() service right after decoding a presented refresh token.
+    Enforces single-use rotation via `claim_jti`'s atomic SET-if-not-exists
+    -- a refresh token that's already been claimed once means either normal
+    re-use of an old browser tab/stale client, or a stolen token being
+    replayed -- either way it's treated as a reuse attack and the ENTIRE
+    session is revoked (every token for this subject, not just this one),
+    matching standard refresh-rotation guidance. The old implementation
+    checked "is it revoked?" and then separately called "revoke it" as two
+    steps, which left a race window for two concurrent requests with the
+    same refresh token to both pass the check; `claim_jti` closes that by
+    doing both atomically in Redis (or under a single lock in-process)."""
     subject = payload.get("sub", "")
     key = session_key(token_type, subject)
     jti = payload.get("jti")
-    if jti and is_jti_revoked(jti):
-        bump_session_version(key)
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
     if payload.get("sv", 0) < get_session_version(key):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
-    if jti:
-        revoke_jti(jti, max(1.0, payload.get("exp", 0) - time.time()))
+    if jti and not claim_jti(jti, max(1.0, payload.get("exp", 0) - time.time())):
+        bump_session_version(key)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
 
 
 def revoke_token(payload: dict[str, Any]) -> None:

@@ -310,11 +310,22 @@ class SupportAuthorType(str, enum.Enum):
 
 
 class EmailDeliveryStatus(str, enum.Enum):
-    """Honest about reality (Phase 8 brief, PLAT-047): this app has no SMTP
-    provider configured. SENT is only ever recorded once a real provider
-    actually accepts the message -- never assumed. NOT_CONFIGURED is the
-    expected status in every environment today."""
+    """Honest about reality (Phase 8 brief, PLAT-047; expanded Phase 10,
+    Task 2). NOT_CONFIGURED is the expected status whenever no real
+    provider is set. SIMULATED (not SENT) is what the "console" sandbox
+    provider records -- deliberately a different word from "sent" so a
+    sandbox delivery can never be mistaken for a real one, in a log line,
+    a test assertion, or an admin screen. ACCEPTED/SENT/FAILED are for a
+    real provider: ACCEPTED means the provider's API/SMTP server took the
+    message (its own further delivery is outside this app's visibility --
+    most providers don't give us more than that synchronously); SENT is
+    kept for a provider that confirms final handoff more concretely.
+    RETRYING marks a FAILED send that a retry attempt is in progress for."""
 
     NOT_CONFIGURED = "not_configured"
+    SIMULATED = "simulated"
+    QUEUED = "queued"
+    ACCEPTED = "accepted"
     SENT = "sent"
     FAILED = "failed"
+    RETRYING = "retrying"

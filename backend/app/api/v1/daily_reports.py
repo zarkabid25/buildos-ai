@@ -1,10 +1,11 @@
 import uuid
 
 from fastapi import APIRouter, Depends, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_roles
+from app.core.storage import get_file_response
 from app.db.session import get_db
 from app.models.enums import UserRole
 from app.models.user import User
@@ -67,6 +68,6 @@ def download_photo(
     photo_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> FileResponse:
-    photo, path = daily_report_service.get_photo_file(db, current_user.company_id, report_id, photo_id)
-    return FileResponse(path, media_type=photo.content_type, filename=photo.original_filename)
+) -> Response:
+    photo = daily_report_service.get_photo_file(db, current_user.company_id, report_id, photo_id)
+    return get_file_response(photo.storage_key, photo.original_filename, photo.content_type)

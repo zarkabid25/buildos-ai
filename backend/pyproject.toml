@@ -18,6 +18,10 @@ dependencies = [
     "anthropic>=1.0.0",
     # PDF text extraction for document search (BUILD-076). Pure Python, BSD.
     "pypdf>=5.0",
+    # S3-compatible object storage backend (Phase 10, Task 3) -- optional at
+    # runtime (only imported if STORAGE_BACKEND=s3), but a real dependency
+    # here so that path is actually installable, not aspirational.
+    "boto3>=1.34.0",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +29,15 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "httpx>=0.27.0",
+    # Phase 10: a real, in-memory SMTP/S3 server for provider-integration
+    # tests -- exercises the real protocol/client code, never a live
+    # third-party service or real credentials.
+    "aiosmtpd>=1.4.0",
+    "moto[s3]>=5.0.0",
+    # A real Redis-protocol TCP server for integration-testing token_store.py/
+    # rate_limit.py's Redis path (multi-client concurrency, failure,
+    # recovery) -- no real Redis has ever been reachable from this project.
+    "fakeredis>=2.20.0",
 ]
 
 [tool.pytest.ini_options]

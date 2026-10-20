@@ -1,11 +1,11 @@
 import uuid
 
 from fastapi import APIRouter, Depends, Form, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_platform_admin, require_platform_roles
-from app.core.storage import resolve_path
+from app.core.storage import get_file_response
 from app.db.session import get_db
 from app.models.enums import MarketplaceSupplierStatus, PlatformStaffRole
 from app.models.platform_admin import PlatformAdmin
@@ -129,10 +129,9 @@ def download_document(
     document_id: uuid.UUID,
     db: Session = Depends(get_db),
     _admin: PlatformAdmin = Depends(get_current_platform_admin),
-) -> FileResponse:
+) -> Response:
     document = marketplace_supplier_service.get_document(db, supplier_id, document_id)
-    path = resolve_path(document.storage_key)
-    return FileResponse(path, media_type=document.content_type, filename=document.original_filename)
+    return get_file_response(document.storage_key, document.original_filename, document.content_type)
 
 
 @router.post("/suppliers/{supplier_id}/products", response_model=MarketplaceProductRead, status_code=201)

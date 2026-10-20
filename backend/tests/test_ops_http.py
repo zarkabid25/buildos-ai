@@ -25,8 +25,15 @@ def test_requests_are_logged_without_query_strings(client, auth_a, caplog):
 
 
 def test_readiness_checks_the_database(client):
+    """Phase 10: readiness also reports real (always freshly-probed) Redis
+    status -- "unreachable (optional in this environment)" in
+    development/test, where Redis has never been required."""
     res = client.get("/api/v1/health/ready")
-    assert res.status_code == 200 and res.json() == {"status": "ok", "database": "ok"}
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "ok"
+    assert body["database"] == "ok"
+    assert "redis" in body
 
 
 def test_readiness_reports_a_dead_database(client):

@@ -1,11 +1,11 @@
 import uuid
 
 from fastapi import APIRouter, Depends, Form, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_roles
-from app.core.storage import IMAGE_TYPES
+from app.core.storage import IMAGE_TYPES, get_file_response
 from app.db.session import get_db
 from app.models.enums import DocumentCategory, UserRole
 from app.models.user import User
@@ -98,16 +98,10 @@ def download_document(
     inline: bool = False,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> FileResponse:
-    document, path = document_service.get_document_file(db, current_user.company_id, document_id)
-    disposition = "inline" if inline and document.content_type in INLINE_PREVIEW_TYPES else "attachment"
-    return FileResponse(
-        path,
-        media_type=document.content_type,
-        filename=document.original_filename,
-        content_disposition_type=disposition,
-        headers={"X-Content-Type-Options": "nosniff"},
-    )
+) -> Response:
+    document = document_service.get_document_file(db, current_user.company_id, document_id)
+    inline_response = inline and document.content_type in INLINE_PREVIEW_TYPES
+    return get_file_response(document.storage_key, document.original_filename, document.content_type, inline=inline_response)
 
 
 @router.delete("/{document_id}", status_code=204)

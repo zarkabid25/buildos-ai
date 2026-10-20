@@ -5,7 +5,7 @@ from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.db.updates import apply_changes
-from app.core.storage import DOCUMENT_TYPES, delete_file, resolve_path, save_upload
+from app.core.storage import DOCUMENT_TYPES, delete_file, read_bytes, save_upload
 from app.models.document import Document, DocumentChunk
 from app.models.project import Project
 from app.models.enums import DocumentCategory
@@ -84,9 +84,8 @@ def update_document(
     return document
 
 
-def get_document_file(db: Session, company_id: uuid.UUID, document_id: uuid.UUID):
-    document = get_document(db, company_id, document_id)
-    return document, resolve_path(document.storage_key)
+def get_document_file(db: Session, company_id: uuid.UUID, document_id: uuid.UUID) -> Document:
+    return get_document(db, company_id, document_id)
 
 
 def delete_document(db: Session, company_id: uuid.UUID, actor_id: uuid.UUID, document_id: uuid.UUID) -> None:
@@ -107,7 +106,7 @@ def index_document(db: Session, document: Document) -> None:
     for a bad file: the document is kept and marked so the UI can say why."""
     db.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).delete()
     try:
-        content = resolve_path(document.storage_key).read_bytes()
+        content = read_bytes(document.storage_key)
     except HTTPException:
         document.text_status, document.text_chars, document.page_count = "failed", None, None
         return

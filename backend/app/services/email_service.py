@@ -1,21 +1,33 @@
 """Email delivery (Phase 8, PLAT-047; provider adapter added Phase 9.1,
-Task 3). Two providers:
+Task 3; retry and SMTP-provider hardening added Phase 10, Task 2). Two
+providers:
 
 - "console" (the default, and the sandbox provider for dev/tests): logs the
-  rendered email and records it as SENT. It's a real, inspectable delivery
-  path (nothing is silently dropped), just not a real inbox -- fine for
-  exercising retry-safety and dedup without needing real credentials.
+  rendered email and records it as SIMULATED -- deliberately NOT the same
+  word as a real provider's success status, so a sandbox delivery can
+  never be mistaken for a real one anywhere it's displayed or asserted on.
+  It's a real, inspectable delivery path (nothing is silently dropped),
+  just not a real inbox -- fine for exercising retry-safety and dedup
+  without needing real credentials. **Refused outside development/test**
+  by config.py's production-safety check (Phase 10): staging/production
+  must configure a real provider.
 - "smtp": sends through a real mail server. Needs SMTP_HOST (and usually
   SMTP_USERNAME/SMTP_PASSWORD) set; without them this honestly reports
-  NOT_CONFIGURED rather than a pretended SENT, same rule as before this
-  phase. A send that reaches the server but is rejected records FAILED
-  with the real error, never silently swallowed.
+  NOT_CONFIGURED rather than a pretended delivery, same rule as before this
+  phase. A send that reaches the server and is accepted records ACCEPTED
+  (the provider took it; this app has no visibility past that point for a
+  plain SMTP send). A send that's rejected or the connection fails records
+  FAILED with the real error, never silently swallowed.
 
 `send_templated` is retry-safe: pass the same `dedup_key` on a repeated
 request (e.g. the invitation id, or "ticket:{id}:message:{message_id}") and
 an already-sent log for that key is returned unchanged instead of sending
 again -- enforced by a real unique constraint on the column, not a
-best-effort check, so it's correct even under concurrent retries."""
+best-effort check, so it's correct even under concurrent retries.
+`retry_failed_email` lets a FAILED send be retried later (there is no
+background worker in this project to do this automatically -- see
+docs/RELEASE_READINESS.md -- so today this is a function an admin action or
+a future worker can call, not a self-driving queue)."""
 
 import logging
 import smtplib
@@ -48,34 +60,42 @@ def _send_via_smtp(to_email: str, subject: str, body: str) -> None:
         smtp.send_message(message)
 
 
+def _attempt_delivery(log: EmailDeliveryLog, to_email: str, subject: str, body: str) -> None:
+    """Mutates `log.status`/`log.error` in place; never raises -- any
+    provider/network failure must be recorded, not propagated as a 500."""
+    settings = get_settings()
+    if settings.email_provider == "smtp":
+        if not settings.smtp_host:
+            log.status = EmailDeliveryStatus.NOT_CONFIGURED
+            log.error = "EMAIL_PROVIDER=smtp but SMTP_HOST is not set."
+            return
+        try:
+            _send_via_smtp(to_email, subject, body)
+            log.status = EmailDeliveryStatus.ACCEPTED
+            log.error = None
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("SMTP send to %s failed: %s", to_email, exc)
+            log.status = EmailDeliveryStatus.FAILED
+            log.error = str(exc)[:500]
+    elif settings.email_provider == "console":
+        logger.info("email_sandbox_delivery to=%s subject=%s", to_email, subject)
+        log.status = EmailDeliveryStatus.SIMULATED
+        log.error = None
+    else:
+        log.status = EmailDeliveryStatus.NOT_CONFIGURED
+        log.error = f"Unknown EMAIL_PROVIDER '{settings.email_provider}'."
+
+
 def send_email(db: Session, to_email: str, subject: str, body: str, template_key: str | None = None, dedup_key: str | None = None) -> EmailDeliveryLog:
     """Lower-level send used by send_templated. Callers that don't need
-    retry-safety (nothing in this app today) can still call this directly
-    with no dedup_key, same as before this phase."""
+    retry-safety can still call this directly with no dedup_key."""
     if dedup_key:
         existing = db.query(EmailDeliveryLog).filter(EmailDeliveryLog.dedup_key == dedup_key).first()
         if existing:
             return existing
 
-    settings = get_settings()
     log = EmailDeliveryLog(to_email=to_email, subject=subject[:255], body=body, template_key=template_key, dedup_key=dedup_key, status=EmailDeliveryStatus.NOT_CONFIGURED)
-
-    if settings.email_provider == "smtp":
-        if not settings.smtp_host:
-            log.error = "EMAIL_PROVIDER=smtp but SMTP_HOST is not set."
-        else:
-            try:
-                _send_via_smtp(to_email, subject, body)
-                log.status = EmailDeliveryStatus.SENT
-            except Exception as exc:  # noqa: BLE001 -- any SMTP/network failure must be recorded, not raised
-                logger.warning("SMTP send to %s failed: %s", to_email, exc)
-                log.status = EmailDeliveryStatus.FAILED
-                log.error = str(exc)[:500]
-    elif settings.email_provider == "console":
-        logger.info("email_sandbox_delivery to=%s subject=%s", to_email, subject)
-        log.status = EmailDeliveryStatus.SENT
-    else:
-        log.error = f"Unknown EMAIL_PROVIDER '{settings.email_provider}'."
+    _attempt_delivery(log, to_email, subject, body)
 
     db.add(log)
     try:
@@ -95,3 +115,22 @@ def send_templated(db: Session, template_key: str, to_email: str, context: dict,
     subject = template.subject.format(**context)
     body = template.body.format(**context)
     return send_email(db, to_email, subject, body, template_key=template_key, dedup_key=dedup_key)
+
+
+def retry_failed_email(db: Session, log_id) -> EmailDeliveryLog:
+    """Retries exactly one previously FAILED send, in place (same log row,
+    same dedup_key -- never creates a second row for the same logical
+    email). Raises ValueError for any status other than FAILED, so this
+    can never be used to "retry" something that already succeeded or was
+    never configured in the first place."""
+    log = db.query(EmailDeliveryLog).filter(EmailDeliveryLog.id == log_id).first()
+    if not log:
+        raise ValueError("No such email delivery log")
+    if log.status != EmailDeliveryStatus.FAILED:
+        raise ValueError(f"Only a FAILED send can be retried (this one is {log.status.value})")
+
+    log.status = EmailDeliveryStatus.RETRYING
+    db.flush()
+    _attempt_delivery(log, log.to_email, log.subject, log.body)
+    db.commit()
+    return log

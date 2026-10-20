@@ -1,228 +1,250 @@
 # BuildOS AI — Release Readiness
 
-Written at the end of Phase 9.1 (Production Launch Hardening), 2026-10-21. Supersedes the Phase 9 version of
-this file. States the actual, evidence-backed condition of the system — not an aspiration. See
+Written at the end of Phase 10 (Infrastructure and Staging Readiness), 2026-10-21. Supersedes the Phase 9.1
+version of this file. States the actual, evidence-backed condition of the system — not an aspiration. See
 `deploy/OPERATIONS.md` for how to run it; this file does not repeat that, only what's verified versus not.
-"Verified working" means covered by an automated test that is currently passing (534 backend tests,
-`tsc --noEmit` clean, `next build` clean — 99 routes, 4/4 Playwright e2e tests passing against a real Chrome
-browser) or exercised live against the dev Postgres this phase; it does not mean verified in a production
-environment, since this system has never been deployed to one.
+"Verified working" means covered by an automated test currently passing, or an action actually executed on this
+development machine (e.g. a real restore test, below) — never an aspiration or a description of what *should*
+work. No staging or production host, no real Redis, no real SMTP provider, and no real S3 bucket have ever
+existed for this project; every "backend X is implemented and tested" claim below means tested against a real,
+protocol-compatible local test double (fakeredis, aiosmtpd, moto) — never a mock of this project's own code, but
+also never the real managed service.
 
-## 1. Resolved security blockers (this phase)
+## 1. Infrastructure architecture
 
-- **Server-side token revocation, now real.** Every JWT already carried a `jti`; nothing ever checked it. Added
-  `app/core/token_store.py`: a per-token denylist (`revoke_jti`/`is_jti_revoked`) and a per-subject session
-  version (`get_session_version`/`bump_session_version`), backed by Redis when reachable, falling back to
-  in-process memory otherwise. Every token now also carries an `sv` (session version) claim checked on every
-  request (`app/api/deps.py`).
-- **Logout and logout-all, on all three auth systems.** `POST /auth/logout` (and the `/platform/auth/` and
-  `/supplier-portal/auth/` equivalents) revokes the calling access token immediately; `.../logout-all` bumps the
-  subject's session version, killing every token for that subject — verified with a test that logs in twice,
-  calls logout-all from one session, and confirms both sessions are dead afterward.
-- **Refresh-token rotation and reuse detection.** `rotate_refresh_or_reject()` (`app/core/security.py`) revokes
-  a refresh token's `jti` the moment it's used; presenting the same refresh token again is treated as a reuse
-  attack and poisons the *entire* session (bumps the session version), not just that one token — verified: the
-  rotated-away original 401s, and so does the token correctly issued from the rotation afterward. Applied to
-  `/auth/refresh`, `/platform/auth/refresh`, and `/supplier-portal/auth/refresh`. Deliberately **not** applied
-  to `/supplier-portal/auth/select-supplier`, which is a repeatable scoping step on an already-valid session
-  (a multi-supplier user switches which supplier they're acting as), not a single-use refresh.
-- **Session invalidation on suspension/deactivation/password change.** Changing a password
-  (`user_service.change_password`), deactivating a user (`user_service.update_user`), and suspending a company
-  (`platform_company_service.set_company_suspended`, which now sweeps every user in that company) all bump the
-  affected session version(s) — verified by reusing an already-issued, still-unexpired token after each change
-  and confirming it's dead, not just confirming a *new* login would fail.
-- **Rate limiting is now Redis-shared, not just in-process.** `app/core/rate_limit.py`'s `SlidingWindowLimiter`
-  uses a Redis sorted set per key when Redis is reachable, falling back to the original in-process behavior
-  otherwise — so multiple backend workers/containers finally share one count instead of each enforcing its own.
-- **Typed, closed environment detection.** `environment` is now an `Environment` enum (`development` / `test` /
-  `staging` / `production`), not a free string — a typo or an unrecognized value is rejected at startup by
-  pydantic, instead of silently skipping every safety check the way the old `environment != "production"`
-  string comparison did. **Staging is now held to the same checks as production** (secret strength, DB
-  password, bcrypt rounds, CORS, and the new `TRUSTED_HOSTS` requirement below) — there is no separate, looser
-  staging profile.
-- **`TRUSTED_HOSTS` enforcement.** A new required setting outside development/test; `TrustedHostMiddleware` is
-  wired into `app/main.py` whenever it's set, rejecting requests with a mismatched `Host` header.
-- **Secrets can no longer leak into logs or tracebacks.** `jwt_secret_key`, `llm_api_key`, and `smtp_password`
-  are now `pydantic.SecretStr` (every call site uses `.get_secret_value()` explicitly); `Settings.__repr__` is
-  overridden to also redact `DATABASE_URL`'s password. Verified directly: `repr(settings)` with a real DB
-  password in it prints `***`, not the password.
+```
+                 ┌─────────────┐
+   HTTPS/TLS  →  │  reverse     │   (not yet chosen/deployed — BUILD-139)
+   (not set up)  │  proxy       │
+                 └──────┬───────┘
+                        │
+        ┌───────────────┼────────────────┐
+        ▼                                ▼
+ ┌─────────────┐                 ┌──────────────┐
+ │  frontend    │   REST/JSON    │  backend       │
+ │  (Next.js,   │ ─────────────→ │  (FastAPI,     │
+ │  1 container)│                │  1 worker)     │
+ └─────────────┘                 └──────┬─────────┘
+                                         │
+                   ┌─────────────────────┼─────────────────────┐
+                   ▼                     ▼                      ▼
+            ┌─────────────┐      ┌──────────────┐      ┌───────────────┐
+            │  Postgres    │      │  Redis        │      │  object        │
+            │  (1 container,│     │  REQUIRED in  │      │  storage       │
+            │  pgdata vol) │      │  staging/prod │      │  (local disk,  │
+            └─────────────┘      │  (Phase 10)   │      │  default; S3-  │
+                                  └──────────────┘      │  compatible,   │
+                                                         │  optional)     │
+                                                         └───────────────┘
+                   outbound: SMTP provider (required in staging/prod, Phase 9.1/10)
+                   outbound: Anthropic API (optional — AI features)
+```
 
-## 2. Remaining security/infrastructure blockers
+All four application-tier services (`db`, `redis`, `backend`, `frontend`) are defined in
+`deploy/docker-compose.prod.yml`, the same file used for both staging and production (see §6). No Kubernetes —
+deliberately, per this phase's instruction. No reverse proxy/TLS termination is in the compose file itself; one
+must be placed in front of ports 3000/8000 by whoever actually deploys this.
 
-- **Redis is optional, not required.** Everything above degrades to the pre-Phase-9.1, single-process-only
-  behavior when Redis isn't configured or isn't reachable (true of every environment this project has run in
-  so far — there is no running Redis on this machine). That degraded mode is **still correct for a single
-  worker**, just not shared across several. Before running more than one backend worker/container, `REDIS_URL`
-  must point at a real, reachable Redis.
-- **No cross-process distributed lock beyond Redis's own atomicity** — the token-store and rate-limiter
-  operations used (`INCR`, `SETEX`, sorted-set `ZADD`/`ZCARD`) are each individually atomic in Redis, but there
-  is no multi-step transaction wrapping them; this is the standard, accepted pattern for this kind of counter
-  and limiter, not a known gap.
-- **No issuer claim / single shared secret** across all three token types (distinguished only by the `type`
-  claim, which is sufficient today since this is one deployment, not several federated services). Worth adding
-  if BuildOS AI is ever split across separate backend services.
-- **Per-product image upload** on the marketplace catalog is still not implemented (flagged in the Phase 7 log;
-  unrelated to this phase's security work, restated here only for completeness).
+**What's new this phase vs. Phase 9.1:** Redis and a real email provider are now load-bearing, enforced
+infrastructure requirements in staging/production (the backend refuses to start without them), not optional
+niceties. A second, swappable object-storage backend (S3-compatible) now exists alongside the original
+local-disk one. Nothing in the architecture diagram above changes shape — the same four services — but two of
+the boxes (Redis, email) move from "nice to have" to "the backend will not start without this."
 
-## 3. Required production environment variables
+## 2. Files changed this phase
 
-New or changed this phase (see `deploy/.env.production.example`, which has been updated to match):
+New: `backend/app/services/ai_quota_service.py` *(Phase 9.1, unchanged)*; this phase's new files:
+`backend/tests/test_storage_s3_http.py`, `backend/tests/test_email_smtp_http.py`,
+`backend/tests/test_redis_integration_http.py`.
 
-| Variable | Required in production? | Notes |
-|---|---|---|
-| `ENVIRONMENT` | Yes | Must be exactly `production` (or `staging`, held to the same checks) — any other value is now rejected at startup, not silently accepted. |
-| `TRUSTED_HOSTS` | Yes, outside development/test | Comma-separated or JSON list of the real API host(s). |
-| `REDIS_URL` | Recommended once running >1 worker | Falls back to in-process state if unset/unreachable — correct for one worker only. |
-| `EMAIL_PROVIDER` | No (defaults to `console`) | Set to `smtp` for real delivery. |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_USE_TLS` | Only if `EMAIL_PROVIDER=smtp` | Without `SMTP_HOST`, email is honestly recorded `NOT_CONFIGURED`. |
-| `EMAIL_FROM_ADDRESS` | Only if sending real email | |
-| `APP_BASE_URL` | Recommended | Used only to build links inside emails (invitation/reset URLs); not security-sensitive. |
-| `JWT_SECRET_KEY`, `DATABASE_URL`, `CORS_ORIGINS`, `BCRYPT_ROUNDS` | Yes (unchanged from Phase 8) | Still validated the same way, now also enforced for `staging`. |
+Modified: `backend/app/core/redis_client.py` (fail-fast startup check, always-fresh health probe, automatic
+recovery after an outage, thread-safe connect path), `backend/app/core/token_store.py` (atomic `claim_jti` for
+race-safe refresh rotation, fail-closed `RedisUnavailableError` on mid-run Redis command failures),
+`backend/app/core/rate_limit.py` (fail-open on mid-run Redis command failures), `backend/app/core/security.py`
+(uses `claim_jti`), `backend/app/core/config.py` (staging now requires `TRUSTED_HOSTS` and a real
+`EMAIL_PROVIDER`, same as production — previously staging skipped both), `backend/app/main.py` (calls
+`verify_redis_at_startup`; a `RedisUnavailableError` exception handler → 503), `backend/app/api/v1/health.py`
+(reports real Redis status), `backend/app/core/storage.py` (rewritten: `StorageBackend` abstraction,
+`LocalStorageBackend`/`S3StorageBackend`, `get_file_response`/`read_bytes` replace the old `resolve_path`),
+`backend/app/services/email_service.py` (`SIMULATED`/`ACCEPTED`/`QUEUED`/`RETRYING` statuses,
+`retry_failed_email`), `backend/app/models/enums.py` (`EmailDeliveryStatus` expanded — no migration needed, the
+column is `VARCHAR`, not a native Postgres enum), `backend/app/services/document_service.py`,
+`backend/app/services/daily_report_service.py`, `backend/app/api/v1/documents.py`,
+`backend/app/api/v1/daily_reports.py`, `backend/app/api/v1/billing.py`,
+`backend/app/api/v1/platform_marketplace.py`, `backend/app/api/v1/platform_support.py` (all five private-file
+download endpoints switched from `resolve_path`+`FileResponse` to `get_file_response`, so they work against
+either storage backend unchanged), `backend/tests/test_units.py`, `backend/tests/test_public_site_http.py`,
+`backend/tests/test_ops_http.py` (updated for the above), `backend/pyproject.toml` (added `boto3`; dev-only
+`aiosmtpd`/`moto`/`fakeredis`), `deploy/docker-compose.prod.yml` (Redis healthcheck + `depends_on`, frontend
+healthcheck, new env vars), `deploy/.env.production.example`, `deploy/OPERATIONS.md`, `docs/daily-log.md`,
+`docs/tickets.md`, `docs/RELEASE_READINESS.md`.
+
+## 3. Code-level blockers resolved
+
+- **Redis silently-forever-down bug, fixed.** Before this phase, `get_redis()` probed Redis exactly once per
+  process and cached "unreachable" forever, even if Redis came back up minutes later. Now re-probes at most
+  once per 10 seconds while down, so recovery is automatic — verified against `fakeredis`'s real TCP server by
+  forcing a failure, pointing back at a working server, and confirming it reconnects once the recheck window
+  elapses.
+- **Redis required in staging/production, fail-fast at startup.** `verify_redis_at_startup()` raises and
+  prevents the process from ever serving traffic if Redis is unreachable in staging/production — a no-op in
+  development/test, where it stays optional exactly as before.
+- **Mid-run Redis failure now has an explicit, deliberate policy per subsystem** instead of undefined behavior:
+  token revocation checks/writes fail *closed* (`RedisUnavailableError` → 503 — a revoked token can never be
+  silently treated as valid just because Redis hiccuped); rate limiting fails *open* (logs a warning, falls back
+  in-process for that call — losing a few seconds of rate-limit coverage is a smaller cost than blocking every
+  login during a blip). Both verified against the real fake-Redis server.
+- **A genuine, previously-latent race condition in refresh-token rotation, found and fixed while writing this
+  phase's concurrency test.** The old rotation logic was check-then-set ("is this jti revoked?" then "revoke
+  it") across two separate Redis round-trips — two concurrent requests presenting the same refresh token could
+  both pass the check before either finished the set, each minting a valid new session from what should have
+  been a single-use token. Replaced with `claim_jti`'s atomic `SET ... NX`. A 20-thread concurrent-claim test
+  against the real fake-Redis server initially reproduced the race (2 "winners" instead of 1) and caught a
+  *second*, unrelated bug in the same pass: `get_redis()`'s own first-connection path had no lock, so many
+  threads racing to connect for the first time could each independently (and sometimes unsuccessfully, under
+  load) attempt a connection — fixed with a connect-path lock. Both fixes are now verified by the same test.
+- **`STORAGE_BACKEND=s3` implemented and tested.** `app/core/storage.py` is now a real two-backend adapter
+  (local disk, unchanged behavior; S3-compatible, new) rather than a hardcoded-to-local-disk module with an
+  aspirational docstring. All five private-file download endpoints now go through one shared
+  `get_file_response()` instead of each building its own `FileResponse` from a local path — verified end-to-end
+  (a real document upload + download over the real HTTP API) against `moto`'s mocked S3, including confirming
+  the response is a signed, expiring redirect, not a bare public URL.
+- **Email delivery status vocabulary expanded and renamed for honesty.** The "console" sandbox provider used to
+  record its simulated sends as `SENT` — the exact same word a real provider's success would use. Renamed to
+  `SIMULATED` so a sandbox delivery can never be mistaken for a real one in a log line, a test assertion, or (in
+  the future) an admin screen. Added `ACCEPTED`/`QUEUED`/`RETRYING` to the status vocabulary and a
+  `retry_failed_email()` function, verified against a real local SMTP server (not a mock).
+- **Staging previously skipped two of production's safety checks** (`TRUSTED_HOSTS`, and there was no
+  `EMAIL_PROVIDER` check at all). Both now apply equally to staging — confirmed by a new test that a staging
+  config without `TRUSTED_HOSTS` is refused exactly like production would be.
 
 ## 4. Infrastructure decisions requiring approval
 
-- **Whether/when to stand up a real Redis instance** for the deployment target, and whether to run more than
-  one backend worker (which now depends on that Redis being reachable for rate limiting and session revocation
-  to stay correct).
-- **Which SMTP/transactional-email provider to use** (SES, SendGrid, Postmark, etc.) and procuring its
-  credentials — `EMAIL_PROVIDER=smtp` is implemented and ready, but has never been pointed at a real provider.
-- **Object storage (S3-compatible)** — still a local-disk-only implementation (`BUILD-138`, unresolved); needs a
-  provider choice and credentials before any real customer file leaves this machine.
-- **Domain/TLS/reverse proxy** — still unresolved (`BUILD-139`); the stack serves plain HTTP today.
+Unchanged from Phase 9.1 in substance, narrower now that Redis/email are code-complete and only need real
+infrastructure behind them:
+
+- **Provisioning a real, reachable Redis instance** for any staging/production deployment — the backend will
+  not start without one now. (Development/test remain unaffected and need nothing.)
+- **Choosing and provisioning a real SMTP/transactional-email provider** (SES, SendGrid, Postmark, etc.) and its
+  credentials — `EMAIL_PROVIDER=smtp` is implemented and integration-tested against a real local SMTP server,
+  never against a live third-party provider.
+- **Whether to provision S3-compatible object storage at all.** Deliberately left optional, not required, this
+  phase — `STORAGE_BACKEND=local` remains a legitimate choice for staging/production (this project has never
+  used anything else in practice). If approved: a bucket, region, and access keys for a real AWS account or
+  S3-compatible provider (MinIO, Cloudflare R2, etc.).
+- **Domain/TLS/reverse proxy** — still entirely unresolved (`BUILD-139`); the stack serves plain HTTP today, and
+  nothing in this phase touched that.
 - **Managed vs. containerized Postgres** — still unresolved (`BUILD-136`).
+- **A metrics/alerting service** (Prometheus, Datadog, Sentry, etc.) — still none chosen; see §6's monitoring
+  checklist for what exists to point one at once chosen.
 
-## 5. Staging deployment guide
+No infrastructure was purchased, provisioned, or credentialed this phase, per this phase's explicit instruction.
+Every claim of "implemented and tested" above means tested against a local, protocol-compatible double — never
+a live third-party service.
 
-Using the existing `deploy/docker-compose.prod.yml` stack (no new compose file needed):
+## 5. Test results
 
-1. `cp deploy/.env.production.example deploy/.env.staging` and fill it in exactly as for production, with
-   `ENVIRONMENT=staging` instead of `production` — the same secret/CORS/bcrypt/trusted-host checks apply; there
-   is no relaxed staging profile.
-2. Point `REDIS_URL` at a real Redis if this staging environment will run more than one backend worker;
-   otherwise the single-process fallback is correct but won't scale past one worker.
-3. `docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.staging up -d --build`.
-4. `curl http://<host>:8000/api/v1/health/ready` should return `{"status":"ok","database":"ok"}`.
-5. Leave `EMAIL_PROVIDER=console` (the default) unless real SMTP credentials are available for this
-   environment — console mode is a real, inspectable sandbox (logs the email, records it `SENT`), safe to use
-   in staging without risking a real send to a real inbox.
-6. This has not been executed on real staging infrastructure by this agent — no staging host has been
-   available in any session of this project. The steps above are the documented procedure, not a confirmed
-   live run.
+- **Backend**: `552 passed, 0 failed` (534 at the end of Phase 9.1 + 18 new this phase: 4 in
+  `test_storage_s3_http.py`, 4 in `test_email_smtp_http.py`, 10 in `test_redis_integration_http.py` — plus 3
+  pre-existing tests updated for the new readiness-response shape and email-status rename). Full suite rerun
+  clean after every fix along the way, not just at the end.
+- **Frontend**: `tsc --noEmit` clean (no frontend changes were needed or made this phase — Phase 10 is entirely
+  backend/infrastructure).
+- **Migration drift check**: clean against the real dev Postgres. **No new migration was needed this phase** —
+  every change was either additive-free (the email status enum lives in a `VARCHAR` column, not a native
+  Postgres enum, so adding values needs no `ALTER TYPE`) or purely application-layer (Redis/storage/config).
+- **Authentication security regression**: `test_security_audit_http.py` (18 tests) and
+  `test_auth_hardening_http.py` (12 tests) both still pass unchanged against the refactored `claim_jti`-based
+  rotation logic.
+- **Financial regression**: full commission/billing/subscription suites (`test_commissions_http.py`,
+  `test_billing_http.py`, `test_platform_http.py`, etc.) pass unchanged — nothing in this phase touched
+  financial logic, per this phase's explicit restriction.
+- **Storage authorization regression**: `test_documents_http.py`, `test_daily_reports_http.py`,
+  `test_billing_http.py`, `test_platform_marketplace_http.py`, `test_public_site_http.py` (126 tests spanning
+  every migrated download endpoint) all pass unchanged against the new `get_file_response` call sites —
+  confirming the storage-backend swap really is transparent to the authorization checks each endpoint does
+  before calling it.
+- **Email integration**: `test_email_smtp_http.py` — a real send accepted by a real local SMTP server, a
+  real connection failure recorded as `FAILED`, and a successful retry of a previously-failed send, all
+  against `aiosmtpd`, not a mocked function.
+- **Real, executed backup/restore test** (not simulated — see §6): `pg_dump` of the live dev database,
+  restored into a fresh scratch database, table count (90) and spot-checked row counts confirmed identical,
+  scratch database dropped. Run directly with `pg_dump`/`pg_restore` against this machine's dev Postgres (no
+  Docker available here to run the full containerized procedure).
 
-## 6. Backup and restore procedure
+## 6. Staging deployment checklist
 
-Unchanged this phase; documented in full in `deploy/OPERATIONS.md` (`deploy/backup.sh`, `pg_restore`/tar
-restore steps). Still not executed end-to-end on this machine (no running production or staging stack to back
-up) — restated here because Task 7 asked for it explicitly, not because anything changed.
+Already verified this phase vs. still awaiting provisioning:
 
-## 7. Monitoring checklist
+**Already verified (code-level, against local test doubles):**
+- [x] Backend refuses to start in staging without `TRUSTED_HOSTS`, a strong `JWT_SECRET_KEY`, a non-default DB
+      password, `bcrypt_rounds >= 12`, non-localhost CORS, a reachable Redis, and a real `EMAIL_PROVIDER`.
+- [x] `docker-compose.prod.yml`: Redis has a healthcheck and the backend's `depends_on` actually waits for it
+      (`condition: service_healthy`), not just "container started." Frontend now has a healthcheck too.
+- [x] `/health/ready` reports real database AND Redis status, always freshly probed.
+- [x] Migrations run automatically on backend container start (`Dockerfile.prod`'s entrypoint) — unchanged,
+      confirmed still accurate.
+- [x] A real backup → restore → verify cycle has been executed (§5) — against the dump/restore commands
+      directly, not the full containerized stack (no Docker on this machine).
+- [x] S3-compatible storage backend implemented and tested against a mocked S3, available via
+      `STORAGE_BACKEND=s3` without code changes.
+- [x] Real SMTP sending implemented and tested against a real local SMTP server.
 
-Already in place, confirmed still accurate (`deploy/OPERATIONS.md`):
-- [x] `/api/v1/health` (liveness) and `/api/v1/health/ready` (readiness, real DB check)
-- [x] Structured per-request logs with `X-Request-ID`, no query strings logged
-- [x] Secrets never appear in `Settings`' own repr/logs (Phase 9.1, see §1)
-- [ ] No metrics/alerting service is wired in (no Prometheus/Datadog/etc. — a genuine gap, not newly introduced)
-- [ ] No alert exists today for "Redis unreachable, rate limiting/session revocation silently degraded to
-      single-process mode" — this would be a valuable alert to add before relying on Redis in production
+**Still awaiting provisioning/approval before a real staging host exists:**
+- [ ] A real, reachable Redis instance for that environment.
+- [ ] A real SMTP (or equivalent) provider and credentials.
+- [ ] A domain name, TLS certificate, and reverse proxy in front of ports 3000/8000.
+- [ ] A decision on Postgres hosting (containerized vs. managed).
+- [ ] A decision on whether to provision S3-compatible storage at all (optional, not required).
+- [ ] Running `deploy/docker-compose.prod.yml` for the first time anywhere outside this writer's head — it has
+      never been built or started, because no Docker is installed on this development machine.
+- [ ] A metrics/alerting service wired up (§ monitoring checklist in `deploy/OPERATIONS.md`).
 
-## 8. Browser QA results
+**Minimum server requirements** (a starting estimate, not load-tested): 2 vCPU / 4 GB RAM is enough to run all
+four containers (Postgres, Redis, backend, frontend) comfortably for a small number of concurrent staging
+users; this has not been load-tested in any way, so treat it as a starting point to revisit once real usage
+exists. **Recurring costs** (compute, managed Postgres if chosen, a Redis instance, an SMTP provider's sending
+tier, S3 storage if chosen, a domain) need separate research against whatever hosting provider is actually
+chosen — nothing here should be read as a cost estimate.
 
-**Playwright now runs successfully on this machine** (Chrome is installed; it wasn't exercised as a true
-end-to-end browser suite in earlier phases' write-ups the same way it was this phase). `frontend/playwright.config.ts`
-already existed from an earlier phase; this phase actually ran it:
+## 7. Remaining security risks
 
-| Spec | Result |
-|---|---|
-| `auth.spec.ts`: sign-up creates a company and lands on the dashboard | ✅ pass |
-| `auth.spec.ts`: wrong password refused, right one signs in, logout returns to login | ✅ pass |
-| `invite.spec.ts`: an admin invites someone, who joins with the given role | ✅ pass |
-| `procurement.spec.ts`: RFQ → compare quotes → award → approve PO → pay, overpayment refused | ✅ pass |
+Carried forward from Phase 9.1, still true, narrower in scope now:
 
-4/4 passed, real Chrome, ~6.6 minutes. This covers the company-portal golden path end-to-end in a real browser,
-including real page rendering, form submission, and navigation — not just API assertions.
+1. **No issuer claim / single shared JWT secret** across all three token types — acceptable for one deployment,
+   worth revisiting only if BuildOS AI is ever split across separate backend services.
+2. **Redis's optional-in-development fallback is still single-process-only** — by design, and only ever
+   reachable in development if someone deliberately runs a local Redis there; staging/production no longer have
+   this gap since Redis is now required and startup-checked.
+3. **No metrics/alerting service** — a Redis outage, a spike in FAILED emails, or a backup failure all produce
+   signals (an unready health check, a log line, a non-zero exit code) but nothing pages anyone automatically
+   yet.
+4. **The in-memory rate-limiter/token-store fallback inside a single worker is not distributed-lock-safe across
+   threads *beyond* the specific fixes made this phase** (the connect-path lock, and `claim_jti`'s atomicity) —
+   other less-contended code paths weren't individually audited for the same class of race, since this phase's
+   scope was the specific requirements asked for (Redis requirement, concurrent refresh rotation), not a full
+   concurrency audit of every function in these two modules.
 
-**Not covered by this run** (acceptance-matrix gap, not a false claim): the supplier portal, platform admin,
-and public marketing site have no Playwright specs at all — only the three company-portal flows above exist as
-browser tests. Mobile-viewport, accessibility, and visual/console-error checks were not part of this run either
-(the existing specs don't assert on any of that). No new Playwright specs were written this phase; the existing
-3-spec suite was discovered, fixed (see below), and run, not expanded — expanding it to the acceptance-matrix
-breadth Task 6 describes (A–F workflows × preconditions/steps/expected/actual/evidence/status) is explicitly
-**not done** and would be a meaningfully sized follow-up, not something achievable inside "keep changes small."
+## 8. Updated RELEASE_READINESS.md
 
-One fix was required to make the suite runnable at all: the e2e harness (`backend/scripts/e2e_server.py`) sets
-`ENVIRONMENT=test`, which the new closed `Environment` enum (§1) initially rejected — added `test` as a fourth,
-explicitly-recognized value (treated identically to `development`: skips the production/staging safety checks).
+This file — rewritten in place for Phase 10, following the explicit final-report structure requested, replacing
+rather than appending to the Phase 9.1 version (which is preserved in git history).
 
-## 9. Full test results
+## 9. Go/no-go recommendation
 
-- **Backend**: `534 passed, 0 failed` (519 at the end of Phase 9 + 15 new/updated this phase: 12 in the new
-  `tests/test_auth_hardening_http.py` covering refresh rotation/reuse, logout/logout-all, session invalidation
-  on password-change/suspension, and AI quota enforcement+isolation; 2 updated in
-  `tests/test_api_authorization_http.py`'s global public-endpoint allow-list for the new
-  `/auth/forgot-password`/`/auth/reset-password` routes; 1 updated + 1 added in `tests/test_public_site_http.py`
-  for the new email-provider behavior).
-- **Frontend**: `tsc --noEmit` clean; `next build` clean, 99 routes (97 at the end of Phase 9 + the new
-  `/forgot-password` and `/reset-password` pages).
-- **Migration drift check**: clean against the real dev Postgres, using the project's existing
-  `compare_metadata`-based check (same one CI runs). Two pre-existing drift entries from Phase 7
-  (`ix_supplier_invitations_token_hash`, `ix_supplier_users_email` — a unique index vs. a unique constraint,
-  the same harmless representation difference the check already allow-listed for two other columns) were found
-  **not actually on the CI allow-list** despite being the same class of difference as what was already there —
-  fixed by adding them to `.github/workflows/ci.yml`'s `UNIQUE_AS_CONSTRAINT` set. This was pre-existing drift
-  from an earlier phase, not something introduced this phase, but it would have failed CI's drift-check job the
-  next time it ran, so it's fixed here rather than left for someone to debug blind.
-- **Cross-portal security regression**: `tests/test_security_audit_http.py` (18 tests) and the new
-  `tests/test_auth_hardening_http.py` (12 tests) both pass against the current code.
-- **Playwright e2e**: see §8 — 4/4 passed.
+**Still no-go for a real production launch**, narrower reasons than Phase 9.1:
 
-## 10. Go/no-go recommendation
-
-**No-go for production**, same conclusion as Phase 9, for reasons that are now narrower and more specific:
-
-- **Still blocking**: no real email provider has ever been used (console-sandbox only); no real Redis has ever
-  been reachable from this codebase (every "Redis-backed" claim above is "falls back correctly when absent,"
-  not "verified under real multi-worker load"); no object storage, domain, or TLS decision has been made; no
-  staging or production host has ever actually run this stack.
-- **No longer blocking, as of this phase**: the single largest Phase-9-era gap — no server-side token
-  revocation at all — is now resolved and tested. Rate limiting is no longer hard-coded to single-process
-  behavior (it upgrades automatically once Redis is reachable). The production-environment check can no longer
-  be bypassed by a typo or an unrecognized environment name.
-- **Recommended next step before any go-live conversation**: stand up one real Redis instance and one real SMTP
-  (or equivalent) provider in a staging environment using §5's guide, and re-run the full Playwright suite
-  against that staging deployment rather than the dev-SQLite e2e harness — nothing in this phase has been
-  verified against infrastructure that doesn't already exist on this single development machine.
-
-## Files changed this phase (Phase 9.1)
-
-New: `backend/app/core/token_store.py`, `backend/app/core/redis_client.py`, `backend/app/models/ai_usage.py`,
-`backend/app/services/ai_quota_service.py`, `backend/app/models/password_reset.py`,
-`backend/app/services/email_templates.py`, `backend/tests/test_auth_hardening_http.py`,
-`backend/alembic/versions/0032_ai_usage_counters.py`, `0033_email_delivery_dedup.py`,
-`0034_password_reset_tokens.py`, `frontend/src/app/forgot-password/page.tsx`,
-`frontend/src/app/reset-password/page.tsx`.
-
-Modified: `backend/app/core/config.py`, `backend/app/core/security.py`, `backend/app/core/rate_limit.py`,
-`backend/app/api/deps.py`, `backend/app/main.py`, `backend/app/api/v1/auth.py`, `backend/app/api/v1/platform.py`,
-`backend/app/api/v1/supplier_portal.py`, `backend/app/api/v1/platform_ai.py`, `backend/app/api/v1/ai.py`,
-`backend/app/api/v1/rfqs.py`, `backend/app/api/v1/marketplace.py`, `backend/app/services/auth_service.py`,
-`backend/app/services/platform_auth_service.py`, `backend/app/services/supplier_auth_service.py`,
-`backend/app/services/user_service.py`, `backend/app/services/platform_staff_service.py`,
-`backend/app/services/supplier_invitation_service.py`, `backend/app/services/notification_service.py`,
-`backend/app/services/public_site_service.py`, `backend/app/services/subscription_service.py`,
-`backend/app/services/entitlement_service.py`, `backend/app/services/email_service.py`,
-`backend/app/models/__init__.py`, `backend/app/models/platform_notification.py`, `backend/app/schemas/billing.py`,
-`backend/app/schemas/auth.py`, `backend/app/ai/llm.py`, `backend/tests/test_units.py`,
-`backend/tests/test_api_authorization_http.py`, `backend/tests/test_public_site_http.py`,
-`frontend/src/lib/billing-types.ts`, `frontend/src/app/billing/page.tsx`, `frontend/src/app/login/page.tsx`,
-`.github/workflows/ci.yml`, `deploy/.env.production.example`, `deploy/OPERATIONS.md`, `docs/daily-log.md`,
-`docs/tickets.md`, `docs/RELEASE_READINESS.md`.
-
-## Remaining limitations (restated plainly)
-
-No real deployment has ever happened — staging or production. No real email has been sent through a real
-provider. No real Redis has ever been reachable from this codebase in any session. No real screenshot or
-visual/accessibility browser check has ever been taken (Playwright now runs and passes, but only for 3
-company-portal specs with no visual/accessibility assertions — see §8). No load testing has been performed. No
-security review beyond this project's own self-audit has occurred. Treat every "verified" claim above as
-"verified by this project's own tests and this agent's own live checks on one development machine," not as
-independent third-party verification or a confirmed run against real production-shaped infrastructure.
+- **Blocking**: no staging or production host has ever existed for this project; no real Redis, SMTP provider,
+  domain, or TLS certificate has ever been provisioned; the Docker Compose stack itself has never been built or
+  run on any machine (no Docker available here).
+- **No longer blocking, as of this phase**: Redis and a real email provider are now hard requirements the
+  backend enforces at startup rather than silent gaps; the storage layer is no longer hardcoded to local disk
+  only; a real backup/restore cycle has actually been executed and verified (not just documented); a genuine
+  concurrency bug in refresh-token rotation (and a related connection-race bug) were found and fixed by writing
+  the tests this phase specifically asked for.
+- **Recommended next step, unchanged in spirit from Phase 9.1**: provision one real Redis instance, one real
+  SMTP provider, and (if a domain/TLS decision has also been made) actually run
+  `deploy/docker-compose.prod.yml` for the first time, on a real machine with Docker, as a genuine staging
+  deployment — then re-run this project's Playwright suite and the backup/restore cycle against *that*
+  deployment specifically. Nothing in this phase changes the fact that this system has never been deployed
+  anywhere outside a single developer's laptop.

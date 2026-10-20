@@ -36,12 +36,10 @@ def list_supplier_application_documents(application_id: uuid.UUID, db: Session =
 
 @router.get("/supplier-applications/{application_id}/documents/{document_id}/download")
 def download_supplier_application_document(application_id: uuid.UUID, document_id: uuid.UUID, db: Session = Depends(get_db), _admin: PlatformAdmin = Depends(get_current_platform_admin)):
-    from fastapi.responses import FileResponse
-
-    from app.core.storage import resolve_path
+    from app.core.storage import get_file_response
 
     document = public_site_service.get_application_document(db, application_id, document_id)
-    return FileResponse(resolve_path(document.storage_key), media_type=document.content_type, filename=document.original_filename)
+    return get_file_response(document.storage_key, document.original_filename, document.content_type)
 
 
 @router.post("/supplier-applications/{application_id}/review", response_model=SupplierApplicationRead)

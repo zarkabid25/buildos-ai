@@ -145,6 +145,7 @@ SAFE_PRODUCTION = {
     "cors_origins": ["https://app.example.com"],
     "bcrypt_rounds": 12,
     "trusted_hosts": ["app.example.com"],
+    "email_provider": "smtp",
 }
 
 
@@ -161,6 +162,7 @@ def test_safe_production_config_starts():
     ({"cors_origins": ["http://localhost:3000"]}, "CORS_ORIGINS"),
     ({"bcrypt_rounds": 4}, "BCRYPT_ROUNDS"),
     ({"trusted_hosts": []}, "TRUSTED_HOSTS"),
+    ({"email_provider": "console"}, "EMAIL_PROVIDER"),
 ])
 def test_unsafe_production_config_refuses_to_start(override, message):
     from pydantic import ValidationError
@@ -175,3 +177,18 @@ def test_development_defaults_still_allowed():
     from app.core.config import Settings
 
     Settings(_env_file=None, environment="development")
+
+
+def test_staging_is_held_to_the_same_bar_as_production():
+    """Phase 10: staging previously skipped the TRUSTED_HOSTS requirement --
+    confirmed and fixed. Staging must now refuse to start under exactly the
+    same conditions production does, not a looser profile."""
+    from app.core.config import Settings
+
+    Settings(_env_file=None, **{**SAFE_PRODUCTION, "environment": "staging"})
+
+    import pytest as _pytest
+    from pydantic import ValidationError
+
+    with _pytest.raises(ValidationError, match="TRUSTED_HOSTS"):
+        Settings(_env_file=None, **{**SAFE_PRODUCTION, "environment": "staging", "trusted_hosts": []})

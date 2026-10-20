@@ -334,10 +334,12 @@ def test_email_delivery_honestly_reports_not_configured_without_smtp_credentials
         db.close()
 
 
-def test_email_sandbox_provider_records_sent(client):
+def test_email_sandbox_provider_records_simulated_not_sent(client):
     """The default "console" provider is a real sandbox (logs and records
-    SENT), not a dead stub -- this is what every test and local dev run
-    exercises unless EMAIL_PROVIDER=smtp is explicitly set."""
+    SIMULATED, never SENT) -- Phase 10 renamed this from SENT specifically
+    so a sandbox delivery can never be mistaken for a real one. This is
+    what every test and local dev run exercises unless EMAIL_PROVIDER=smtp
+    is explicitly set."""
     from app.db.session import SessionLocal
     from app.services import email_service
 
@@ -345,7 +347,7 @@ def test_email_sandbox_provider_records_sent(client):
     try:
         log = email_service.send_email(db, "someone@example.com", "Test", "Body")
         db.commit()
-        assert log.status.value == "sent"
+        assert log.status.value == "simulated"
     finally:
         db.close()
 

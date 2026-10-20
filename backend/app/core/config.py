@@ -64,6 +64,20 @@ class Settings(BaseSettings):
 
     storage_dir: str = "./storage_data"
     max_upload_bytes: int = 10 * 1024 * 1024
+    # Phase 10 (Task 3): "local" (default, the only backend ever actually
+    # used in this project -- no S3 credentials have ever been provisioned)
+    # or "s3". Deliberately NOT required to be "s3" in staging/production --
+    # unlike Redis/email, nothing in this phase's instructions asked for
+    # object storage to be mandatory, and doing so would make every
+    # staging/production config refuse to start without real AWS
+    # credentials this project has never been given.
+    storage_backend: str = "local"
+    s3_bucket: str = ""
+    s3_region: str = ""
+    s3_endpoint_url: str = ""  # set for a non-AWS S3-compatible provider (MinIO, R2, etc.)
+    s3_access_key_id: SecretStr = SecretStr("")
+    s3_secret_access_key: SecretStr = SecretStr("")
+    s3_presigned_url_expiry_seconds: int = 300
 
     # Brute-force protection (BUILD-125). Shared across workers via Redis when
     # reachable (app/core/rate_limit.py); falls back to in-process memory otherwise.
@@ -90,10 +104,11 @@ class Settings(BaseSettings):
     llm_max_tool_iterations: int = 8
 
     # Phase 9.1 (Task 3): "console" is the sandbox provider (logs the
-    # message and records it as SENT -- real enough to exercise retry-safety
-    # and dedup in dev/tests, but not a real inbox). "smtp" needs real
+    # message and records it as SIMULATED -- real enough to exercise
+    # retry-safety and dedup in dev/tests, but not a real inbox; refused
+    # outside development/test as of Phase 10). "smtp" needs real
     # credentials below; without them it's reported as NOT_CONFIGURED,
-    # never a pretended SENT, same honesty rule as before this phase.
+    # never a pretended delivery, same honesty rule as before this phase.
     email_provider: str = "console"
     email_from_address: str = "noreply@buildos.ai"
     # Used only to build links inside emails (invitation/reset URLs) --
@@ -135,8 +150,13 @@ class Settings(BaseSettings):
             problems.append("BCRYPT_ROUNDS must be at least 12")
         if not self.cors_origins or any("localhost" in origin for origin in self.cors_origins):
             problems.append("CORS_ORIGINS must list the real frontend address, not localhost")
-        if self.environment == Environment.PRODUCTION and not self.trusted_hosts:
-            problems.append("TRUSTED_HOSTS must list the real production host(s)")
+        if not self.trusted_hosts:
+            problems.append("TRUSTED_HOSTS must list the real host(s)")
+        # Phase 10 (Task 2): the console provider is a real, inspectable
+        # sandbox -- exactly why it must never be mistaken for production
+        # delivery. Only a real provider is allowed once staging/production.
+        if self.email_provider == "console":
+            problems.append("EMAIL_PROVIDER must be 'smtp' (or another real provider), not the 'console' sandbox")
         if problems:
             raise ValueError(f"Refusing to start in {self.environment.value}: " + "; ".join(problems))
         return self

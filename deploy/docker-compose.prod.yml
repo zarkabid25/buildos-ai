@@ -1,7 +1,8 @@
-# Production stack (BUILD-135). Run from the repo root:
+# Production/staging stack (BUILD-135; hardened Phase 10). Run from the repo root:
 #   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.production up -d --build
 # deploy/.env.production is not in git; start from deploy/.env.production.example.
 # Put a TLS-terminating reverse proxy in front of ports 3000/8000 (BUILD-139).
+# No Kubernetes here by design (Phase 10 instruction) -- this is the full stack.
 
 services:
   db:
@@ -23,6 +24,18 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # Phase 10 (Task 1): Redis is REQUIRED in staging/production -- app.core.config.py
+    # refuses to start without it reachable. A healthcheck here means `backend`'s
+    # own `depends_on: redis: condition: service_healthy` below actually waits for
+    # a Redis that's really answering, not just a container that's merely running.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redisdata:/data
+    command: ["redis-server", "--appendonly", "yes"]
 
   backend:
     build:
@@ -30,12 +43,27 @@ services:
       dockerfile: Dockerfile.prod
     restart: unless-stopped
     environment:
-      ENVIRONMENT: production
+      ENVIRONMENT: ${ENVIRONMENT:-production}
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY in deploy/.env.production}
       CORS_ORIGINS: ${CORS_ORIGINS}
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:?set TRUSTED_HOSTS in deploy/.env.production}
       STORAGE_DIR: /app/storage_data
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:?set EMAIL_PROVIDER in deploy/.env.production -- "console" is refused outside development/test}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-noreply@example.com}
+      APP_BASE_URL: ${APP_BASE_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-claude-opus-5}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -46,6 +74,8 @@ services:
       - "8000:8000"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/ready')"]
@@ -63,8 +93,15 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/login', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   pgdata:
   uploads:
+  redisdata:

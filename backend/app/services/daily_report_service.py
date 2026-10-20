@@ -3,7 +3,7 @@ import uuid
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.storage import IMAGE_TYPES, resolve_path, save_upload
+from app.core.storage import IMAGE_TYPES, save_upload
 from app.models.daily_report import DailyReport, DailyReportPhoto
 from app.schemas.daily_report import DailyReportCreate
 from app.services.project_service import get_project
@@ -90,4 +90,4 @@ def get_photo_file(db: Session, company_id: uuid.UUID, report_id: uuid.UUID, pho
     )
     if not photo:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Photo not found")
-    return photo, resolve_path(photo.storage_key)
+    return photo

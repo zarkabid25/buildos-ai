@@ -3,11 +3,11 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_roles
-from app.core.storage import resolve_path
+from app.core.storage import get_file_response
 from app.db.session import get_db
 from app.models.billing import PlanPrice
 from app.models.enums import UserRole
@@ -130,10 +130,9 @@ async def submit_payment(
 
 
 @router.get("/payments/{submission_id}/proof")
-def download_payment_proof(submission_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> FileResponse:
+def download_payment_proof(submission_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> Response:
     submission = invoice_service.get_payment_submission(db, current_user.company_id, submission_id)
-    path = resolve_path(submission.proof_storage_key)
-    return FileResponse(path, media_type=submission.proof_content_type, filename=submission.proof_filename)
+    return get_file_response(submission.proof_storage_key, submission.proof_filename, submission.proof_content_type)
 
 
 @router.get("/entitlements", response_model=EntitlementRead)
