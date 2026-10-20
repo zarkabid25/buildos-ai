@@ -140,6 +140,7 @@ export default function BillingPage() {
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <Usage label="Projects" current={ent.current_projects} max={ent.max_projects} />
               <Usage label="Team members" current={ent.current_team_members} max={ent.max_team_members} />
+              <Usage label="AI messages this month" current={ent.current_ai_messages} max={ent.ai_monthly_messages} />
               <div>
                 <p className="text-xs text-muted">Marketplace</p>
                 <p className="text-sm font-medium text-ink">{ent.marketplace_included ? "Included" : "Not included"}</p>

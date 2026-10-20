@@ -1,13 +1,29 @@
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 import bcrypt
+from fastapi import HTTPException, status
 from jose import JWTError, jwt
 
 from app.core.config import get_settings
+from app.core.token_store import bump_session_version, get_session_version, is_jti_revoked, revoke_jti
 
 settings = get_settings()
+
+_SESSION_PREFIX = {
+    "access": "user", "refresh": "user",
+    "platform_access": "platform", "platform_refresh": "platform",
+    "supplier_access": "supplier", "supplier_refresh": "supplier",
+}
+
+
+def session_key(token_type: str, subject: str) -> str:
+    """The key session versions (logout-all, suspension, password change,
+    reuse-detection) are tracked under -- shared between a type's access and
+    refresh tokens, since invalidating one must invalidate both."""
+    return f"{_SESSION_PREFIX[token_type]}:{subject}"
 
 # passlib's CryptContext is unmaintained and breaks against bcrypt>=4.1 (it probes
 # a private `__about__` attribute bcrypt no longer exposes), so we call bcrypt directly.
@@ -37,10 +53,15 @@ def _create_token(
         "iat": now,
         "exp": now + expires_delta,
         "jti": str(uuid.uuid4()),
+        # Phase 9.1 (Task 1): the subject's session version *at issue time*.
+        # Bumping it (logout-all, suspension, password change, reuse
+        # detection) immediately invalidates this and every other
+        # already-issued token for the same subject -- see deps.py.
+        "sv": get_session_version(session_key(token_type, subject)),
     }
     if extra_claims:
         payload.update(extra_claims)
-    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    return jwt.encode(payload, settings.jwt_secret_key.get_secret_value(), algorithm=settings.jwt_algorithm)
 
 
 def create_access_token(user_id: str) -> str:
@@ -87,6 +108,41 @@ def create_supplier_refresh_token(supplier_user_id: str) -> str:
 
 def decode_token(token: str) -> dict[str, Any] | None:
     try:
-        return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        return jwt.decode(token, settings.jwt_secret_key.get_secret_value(), algorithms=[settings.jwt_algorithm])
     except JWTError:
         return None
+
+
+def rotate_refresh_or_reject(payload: dict[str, Any], token_type: str) -> None:
+    """Phase 9.1 (Task 1): called by every refresh() service right after
+    decoding a presented refresh token. Enforces single-use rotation: a
+    refresh token that's already been consumed once (its jti is on the
+    denylist) means either normal re-use of an old browser tab/stale client,
+    or a stolen token being replayed -- either way it's treated as a
+    reuse attack and the ENTIRE session is revoked (every token for this
+    subject, not just this one), matching standard refresh-rotation
+    guidance. A still-valid, not-yet-used refresh token is consumed here
+    (revoked) so it can't be replayed once the caller mints its replacement."""
+    subject = payload.get("sub", "")
+    key = session_key(token_type, subject)
+    jti = payload.get("jti")
+    if jti and is_jti_revoked(jti):
+        bump_session_version(key)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
+    if payload.get("sv", 0) < get_session_version(key):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
+    if jti:
+        revoke_jti(jti, max(1.0, payload.get("exp", 0) - time.time()))
+
+
+def revoke_token(payload: dict[str, Any]) -> None:
+    """Logout of exactly the session this one token belongs to."""
+    jti = payload.get("jti")
+    if jti:
+        revoke_jti(jti, max(1.0, payload.get("exp", 0) - time.time()))
+
+
+def logout_all_sessions(token_type: str, subject: str) -> None:
+    """Logout-all-sessions, and the same primitive used for suspension,
+    deactivation, and password changes."""
+    bump_session_version(session_key(token_type, subject))

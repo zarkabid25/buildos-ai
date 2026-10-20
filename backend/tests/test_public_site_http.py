@@ -313,11 +313,16 @@ def test_support_ticket_reply_notifies_supplier_portal_user(client):
     assert any(n["notification_type"] == "support_ticket_reply" for n in res.json())
 
 
-def test_email_delivery_honestly_reports_not_configured(client):
-    """No SMTP provider is configured in this environment -- confirmed before
-    building this. send_email() must record that honestly, not pretend."""
+def test_email_delivery_honestly_reports_not_configured_without_smtp_credentials(client, monkeypatch):
+    """Phase 9.1 (Task 3): with EMAIL_PROVIDER=smtp but no SMTP_HOST set,
+    send_email() must record that honestly, not pretend delivery succeeded."""
+    from app.core.config import get_settings
     from app.db.session import SessionLocal
     from app.services import email_service
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "email_provider", "smtp")
+    monkeypatch.setattr(settings, "smtp_host", "")
 
     db = SessionLocal()
     try:
@@ -325,6 +330,39 @@ def test_email_delivery_honestly_reports_not_configured(client):
         db.commit()
         assert log.status.value == "not_configured"
         assert log.error is not None
+    finally:
+        db.close()
+
+
+def test_email_sandbox_provider_records_sent(client):
+    """The default "console" provider is a real sandbox (logs and records
+    SENT), not a dead stub -- this is what every test and local dev run
+    exercises unless EMAIL_PROVIDER=smtp is explicitly set."""
+    from app.db.session import SessionLocal
+    from app.services import email_service
+
+    db = SessionLocal()
+    try:
+        log = email_service.send_email(db, "someone@example.com", "Test", "Body")
+        db.commit()
+        assert log.status.value == "sent"
+    finally:
+        db.close()
+
+
+def test_email_send_is_retry_safe_via_dedup_key(client):
+    """A repeated request with the same dedup_key (e.g. a client retry after
+    a timeout) must never send -- i.e. create -- a second log row."""
+    from app.db.session import SessionLocal
+    from app.services import email_service
+
+    db = SessionLocal()
+    try:
+        first = email_service.send_email(db, "dedup@example.com", "Test", "Body", dedup_key="test-dedup-1")
+        db.commit()
+        second = email_service.send_email(db, "dedup@example.com", "Test", "Body", dedup_key="test-dedup-1")
+        db.commit()
+        assert first.id == second.id
     finally:
         db.close()
 

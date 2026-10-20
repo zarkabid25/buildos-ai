@@ -17,7 +17,8 @@ from app.models.enums import LIVE_SUBSCRIPTION_STATUSES, SubscriptionStatus
 from app.models.platform_admin import PlatformAdmin
 from app.models.user import User
 from app.schemas.billing import CompanyBillingSummaryRead, PlanChangeRequest, SubscriptionCreate, SubscriptionEventRead, SubscriptionRead
-from app.services import audit_service, platform_audit_service, subscription_plan_service
+from app.core.config import get_settings
+from app.services import audit_service, email_service, platform_audit_service, subscription_plan_service
 
 _ALLOWED_TRANSITIONS: dict[SubscriptionStatus, set[SubscriptionStatus]] = {
     SubscriptionStatus.TRIALING: {SubscriptionStatus.ACTIVE, SubscriptionStatus.PENDING_PAYMENT, SubscriptionStatus.CANCELLED, SubscriptionStatus.EXPIRED},
@@ -119,6 +120,15 @@ def create_subscription(db: Session, company_id: uuid.UUID, actor_user: User, pa
     audit_service.record(db, company_id, actor_user.id, "billing.subscription_created", "company_subscription", sub.id, f"Subscribed to {plan.name}")
     db.commit()
     db.refresh(sub)
+    company = db.query(Company).filter(Company.id == company_id).first()
+    email_service.send_templated(
+        db, "billing_notification", actor_user.email,
+        {
+            "event": "New subscription started", "company_name": company.name if company else "your company",
+            "detail": f"Subscribed to the {plan.name} plan.", "billing_url": f"{get_settings().app_base_url}/billing",
+        },
+        dedup_key=f"billing-subscription-created:{sub.id}",
+    )
     return _read(sub)
 
 

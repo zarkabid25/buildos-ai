@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import bearer_scheme, get_current_user
 from app.core.config import get_settings
 from app.core.rate_limit import limiter
+from app.core.security import decode_token
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.auth import AuthResponse, LoginRequest, RefreshRequest, RegisterRequest, TokenPair
+from app.schemas.auth import AuthResponse, ForgotPasswordRequest, LoginRequest, RefreshRequest, RegisterRequest, ResetPasswordRequest, TokenPair
 from app.schemas.user import AcceptInvitation, InvitationInfo, PasswordChange, UserRead, UserSelfUpdate
 from app.services import auth_service, user_service
 
@@ -68,6 +70,24 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     return AuthResponse(**tokens.model_dump(), user=UserRead.model_validate(user))
 
 
+@router.post("/forgot-password", status_code=204)
+def forgot_password(payload: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)) -> None:
+    settings = get_settings()
+    key = f"forgot-password:{_client_ip(request)}"
+    limiter.check(key, settings.register_max_per_ip, settings.register_window_seconds, TOO_MANY)
+    limiter.hit(key)
+    auth_service.request_password_reset(db, payload.email)
+
+
+@router.post("/reset-password", status_code=204)
+def reset_password_endpoint(payload: ResetPasswordRequest, request: Request, db: Session = Depends(get_db)) -> None:
+    settings = get_settings()
+    key = f"reset-password:{_client_ip(request)}"
+    limiter.check(key, settings.register_max_per_ip, settings.register_window_seconds, TOO_MANY)
+    limiter.hit(key)
+    auth_service.reset_password(db, payload.token, payload.new_password)
+
+
 @router.post("/refresh", response_model=TokenPair)
 def refresh(payload: RefreshRequest, request: Request, db: Session = Depends(get_db)) -> TokenPair:
     # Phase 9 security audit (PLAT-049): previously unlimited -- a stolen or
@@ -77,6 +97,25 @@ def refresh(payload: RefreshRequest, request: Request, db: Session = Depends(get
     limiter.check(key, settings.refresh_max_per_ip, settings.refresh_window_seconds, TOO_MANY)
     limiter.hit(key)
     return auth_service.refresh(db, payload.refresh_token)
+
+
+@router.post("/logout", status_code=204)
+def logout(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme), current_user: User = Depends(get_current_user)) -> None:
+    """Revokes only the access token used to call this endpoint. The
+    client's refresh token keeps working until it's next presented, at
+    which point a client that also discards its refresh token on logout
+    (the normal pattern) simply never calls /refresh again; a client that
+    somehow still presented it would just get a fresh, equally-logged-out-
+    able access token -- logout-all below is the real "kill everything"
+    action."""
+    payload = decode_token(credentials.credentials)
+    if payload:
+        auth_service.logout(payload)
+
+
+@router.post("/logout-all", status_code=204)
+def logout_all(current_user: User = Depends(get_current_user)) -> None:
+    auth_service.logout_all(current_user.id)
 
 
 @router.get("/me", response_model=UserRead)

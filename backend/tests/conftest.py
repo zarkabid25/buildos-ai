@@ -65,6 +65,11 @@ def fresh_db():
     from app.core.rate_limit import limiter
 
     limiter.reset()
+    # Same for the revoked-jti/session-version store (Phase 9.1) -- no Redis
+    # runs in CI/tests, so it's the in-memory fallback that needs clearing.
+    from app.core.token_store import reset_for_tests
+
+    reset_for_tests()
     yield
 
 

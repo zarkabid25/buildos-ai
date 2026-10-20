@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.security import logout_all_sessions
 from app.models.company import Company
 from app.models.enums import CompanyOnboardingStatus
 from app.models.platform_admin import PlatformAdmin
@@ -78,6 +79,12 @@ def set_company_suspended(
 
     company.is_active = not suspended
     company.suspended_at = None if not suspended else datetime.now(timezone.utc)
+    if suspended:
+        # get_current_user already re-checks company.is_active on every
+        # request, but this also kills every already-issued access token
+        # immediately rather than waiting for its natural expiry.
+        for user_id in db.query(User.id).filter(User.company_id == company_id).all():
+            logout_all_sessions("access", str(user_id[0]))
     platform_audit_service.record(
         db, actor.id, f"company.{'suspended' if suspended else 'reactivated'}", "company", company.id,
         f"{company.name} {'suspended' if suspended else 'reactivated'} by {actor.full_name}",

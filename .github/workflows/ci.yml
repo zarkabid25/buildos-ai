@@ -51,11 +51,11 @@ jobs:
           from app.db.base_class import Base
 
           # Known, harmless differences: migrations add company_id foreign keys the
-          # models don't declare, and express two unique columns as a constraint
+          # models don't declare, and express several unique columns as a constraint
           # rather than a unique index. Anything else (missing table, column, type,
           # index) fails the build.
           ALLOWED = {"remove_fk", "remove_constraint"}
-          UNIQUE_AS_CONSTRAINT = {"ix_companies_code", "ix_users_email"}
+          UNIQUE_AS_CONSTRAINT = {"ix_companies_code", "ix_users_email", "ix_supplier_invitations_token_hash", "ix_supplier_users_email"}
 
           with create_engine("postgresql://ci:ci@localhost:5432/migrations").connect() as conn:
               diffs = compare_metadata(MigrationContext.configure(conn, opts={"compare_type": True}), Base.metadata)

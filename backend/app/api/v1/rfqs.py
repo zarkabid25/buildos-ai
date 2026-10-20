@@ -11,7 +11,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.ai import AiNarrationResponse
 from app.schemas.rfq import AwardRequest, QuotationCreate, RfqCreate, RfqRead, RfqSummary
-from app.services import rfq_service
+from app.services import ai_quota_service, rfq_service
 
 AI_SYSTEM_PROMPT = (
     "You are an assistant for a construction company's procurement team, helping them read an RFQ "
@@ -99,5 +99,6 @@ def ai_summary(
         prompt = f"Summarize what this RFQ is asking for, then explain how the received quotations compare (price, delivery, validity) -- using only the real data below:\n\n{data}"
     else:
         prompt = f"Summarize what this RFQ is asking for, in plain language, using only the real data below:\n\n{data}"
+    ai_quota_service.reserve_usage(db, current_user.company_id)
     text = generate_narration(llm, AI_SYSTEM_PROMPT, prompt, actor_key=f"user:{current_user.id}", feature="rfq_summary")
     return AiNarrationResponse(narration=text)

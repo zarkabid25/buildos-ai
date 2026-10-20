@@ -13,12 +13,14 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.security import hash_password
 from app.models.enums import MarketplaceSupplierStatus, SupplierMembershipStatus
 from app.models.marketplace_supplier import MarketplaceSupplier
 from app.models.platform_admin import PlatformAdmin
 from app.models.supplier_user import SupplierInvitation, SupplierMembership, SupplierUser
 from app.schemas.supplier_portal import SupplierAcceptInvitation, SupplierInvitationCreate, SupplierInvitationCreated, SupplierInvitationInfo, SupplierInvitationRead
+from app.services import email_service
 
 INVITE_VALID_FOR = timedelta(days=7)
 
@@ -109,6 +111,15 @@ def _create(
     db.flush()
     db.commit()
     db.refresh(invitation)
+    supplier = db.query(MarketplaceSupplier).filter(MarketplaceSupplier.id == marketplace_supplier_id).first()
+    email_service.send_templated(
+        db, "account_invitation", email,
+        {
+            "org_name": supplier.name if supplier else "a supplier organization", "inviter_name": inviter_name or "A team member", "role": payload.role.value,
+            "accept_url": f"{get_settings().app_base_url}/supplier-portal/accept-invite?token={token}", "expires_at": invitation.expires_at.isoformat(),
+        },
+        dedup_key=f"supplier-invitation:{invitation.id}",
+    )
     return SupplierInvitationCreated(**_read(invitation, inviter_name).model_dump(), token=token)
 
 

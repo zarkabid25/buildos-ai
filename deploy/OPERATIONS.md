@@ -68,5 +68,17 @@ Practise this on a spare machine before you need it.
 
 ## Scaling limits to know about
 
-- **One backend worker/container.** Login rate limits are counted in process memory (`app/core/rate_limit.py`). More workers or containers would each keep their own count; move the limiter to Redis (already in the stack) first.
+- **Rate limiting and session revocation now share state across workers/containers (Phase 9.1) once `REDIS_URL` is reachable** (`app/core/rate_limit.py`, `app/core/token_store.py`). Without Redis reachable, both silently fall back to in-process memory -- fine for one worker, wrong for several (each would keep its own counts and its own revoked-token list, so a token revoked on worker A would still work against worker B). Set `REDIS_URL` to a real reachable Redis before running more than one backend worker/container.
 - **Migrations on start** assume a single backend container. With several, run `alembic upgrade head` as a separate one-off step instead.
+
+## Staging deployment (Phase 9.1)
+
+The same `deploy/docker-compose.prod.yml` stack works for a staging environment: set `ENVIRONMENT=staging` instead of `production` in `deploy/.env.production` (now a closed, typed set -- see `app/core/config.py`'s `Environment` enum). Staging is held to the **same** safety checks production is (real secret, real DB password, strong bcrypt, no localhost CORS, real `TRUSTED_HOSTS`) -- there is no separate, looser staging profile, so a staging deploy can never accidentally run with production's unsafe defaults.
+
+## Email delivery (Phase 9.1, Task 3)
+
+`EMAIL_PROVIDER` is `console` by default (a real sandbox: logs the message and records it as SENT in `email_delivery_logs` -- not a dead stub, but not a real inbox either). Set `EMAIL_PROVIDER=smtp` plus `SMTP_HOST`/`SMTP_USERNAME`/`SMTP_PASSWORD` to send through a real mail server; without `SMTP_HOST` set, sends are honestly recorded `NOT_CONFIGURED`, never a pretended `SENT`. Every send is retry-safe: callers pass a stable `dedup_key` (e.g. an invitation's own id), enforced by a real unique database constraint, so a retried request can never double-email. **No real SMTP credentials have been used in this project** -- live delivery to a real inbox is unverified; only the `console` sandbox path and the `NOT_CONFIGURED`/`FAILED` honest-reporting paths have been exercised.
+
+## Object storage (BUILD-138, still open)
+
+`app/core/storage.py` is written as an opaque-key abstraction (callers never see a filesystem path) specifically so it can be swapped for S3-compatible storage without touching call sites, but it is still hardcoded to local disk today -- no S3/boto3 dependency exists in this project, and no object storage credentials have ever been available to it. Moving to S3-compatible storage means: adding an S3 client dependency, replacing `save_upload`/`resolve_path`/`delete_file`'s internals (same function signatures), and deciding on signed-URL vs proxied access for private files (payment proofs, verification documents) -- this is an infrastructure decision requiring real credentials, not something this project can complete without them.

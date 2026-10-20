@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
@@ -12,6 +13,13 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title=settings.app_name)
     app.add_middleware(RequestLogMiddleware)
+
+    # Phase 9.1 (Task 2): only enforced once TRUSTED_HOSTS is actually set
+    # (required by config.py's startup check once environment isn't
+    # "development") -- an empty list here would make every Host header
+    # valid, same as not having the middleware at all.
+    if settings.trusted_hosts:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
 
     app.add_middleware(
         CORSMiddleware,

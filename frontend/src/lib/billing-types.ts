@@ -109,6 +109,7 @@ export interface Entitlements {
   marketplace_included: boolean;
   current_projects: number;
   current_team_members: number;
+  current_ai_messages: number;
   billing_status: SubscriptionStatus | null;
   current_period_end: string | null;
   grace_period_ends_at: string | null;

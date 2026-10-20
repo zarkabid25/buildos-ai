@@ -60,10 +60,10 @@ def get_llm_dependency() -> LLMClient:
 
 def get_llm_client() -> LLMClient:
     settings = get_settings()
-    if not settings.llm_api_key:
+    if not settings.llm_api_key.get_secret_value():
         raise AINotConfigured("No LLM API key is configured (set LLM_API_KEY).")
     return AnthropicLLMClient(
-        api_key=settings.llm_api_key,
+        api_key=settings.llm_api_key.get_secret_value(),
         model=settings.llm_model,
         max_tokens=settings.llm_max_tokens,
         use_fallbacks=settings.llm_use_fallbacks,

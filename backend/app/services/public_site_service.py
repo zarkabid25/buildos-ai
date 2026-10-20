@@ -26,7 +26,7 @@ from app.schemas.public_site import (
     SupplierApplicationDocumentRead,
     SupplierApplicationRead,
 )
-from app.services import marketplace_supplier_service, platform_notification_service
+from app.services import email_service, marketplace_supplier_service, platform_notification_service
 
 DUPLICATE_WINDOW = timedelta(hours=24)
 
@@ -216,4 +216,13 @@ def review_application(db: Session, actor: PlatformAdmin, application_id: uuid.U
     application.reviewed_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(application)
+    email_service.send_templated(
+        db, "supplier_onboarding", application.email,
+        {
+            "contact_name": application.contact_name, "supplier_name": application.business_name,
+            "status": application.status.value,
+            "detail": review_notes or ("A platform team member will follow up with next steps." if approve else ""),
+        },
+        dedup_key=f"supplier-application-review:{application.id}",
+    )
     return get_application(db, application.id)

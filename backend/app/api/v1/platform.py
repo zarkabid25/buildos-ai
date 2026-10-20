@@ -3,9 +3,12 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_platform_admin, require_platform_roles
+from fastapi.security import HTTPAuthorizationCredentials
+
+from app.api.deps import bearer_scheme, get_current_platform_admin, require_platform_roles
 from app.core.config import get_settings
 from app.core.rate_limit import limiter
+from app.core.security import decode_token
 from app.db.session import get_db
 from app.models.enums import PlatformStaffRole
 from app.models.platform_admin import PlatformAdmin
@@ -60,6 +63,18 @@ def refresh(payload: PlatformRefreshRequest, request: Request, db: Session = Dep
     limiter.check(key, settings.refresh_max_per_ip, settings.refresh_window_seconds, TOO_MANY)
     limiter.hit(key)
     return platform_auth_service.refresh(db, payload.refresh_token)
+
+
+@router.post("/auth/logout", status_code=204)
+def logout(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme), _admin: PlatformAdmin = Depends(get_current_platform_admin)) -> None:
+    payload = decode_token(credentials.credentials)
+    if payload:
+        platform_auth_service.logout(payload)
+
+
+@router.post("/auth/logout-all", status_code=204)
+def logout_all(current_admin: PlatformAdmin = Depends(get_current_platform_admin)) -> None:
+    platform_auth_service.logout_all(current_admin.id)
 
 
 @router.get("/auth/me", response_model=PlatformAdminRead)

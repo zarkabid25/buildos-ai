@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import NotificationType, UserRole
 from app.models.notification import Notification
 from app.models.user import User
+from app.services import email_service
 
 
 def create_notification(
@@ -101,21 +102,40 @@ def mark_read(db: Session, company_id: uuid.UUID, user_id: uuid.UUID, notificati
     return notification
 
 
+def _email_support_update(db: Session, notification: Notification, user_id: uuid.UUID, ticket_subject: str, detail: str) -> None:
+    """Phase 9.1 (Task 3): the in-app notification above already exists;
+    this just also emails it, using the notification's own id as the dedup
+    key so it can never double-send even if this function were called
+    twice for the same event."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return
+    email_service.send_templated(
+        db, "support_update", user.email,
+        {"ticket_subject": ticket_subject, "detail": detail},
+        dedup_key=f"support-notification:{notification.id}",
+    )
+
+
 def notify_support_ticket_reply(db: Session, company_id: uuid.UUID, user_id: uuid.UUID, ticket_subject: str, ticket_id: uuid.UUID) -> Notification:
     """Phase 8 (PLAT-047): the company user who opened a ticket gets told
     when staff reply -- reuses the existing notification table/service
     exactly, just a new NotificationType value."""
-    return create_notification(
+    notification = create_notification(
         db, company_id, user_id, NotificationType.SUPPORT_TICKET_REPLY,
         f"New reply on \"{ticket_subject}\"", link=f"/support/{ticket_id}",
     )
+    _email_support_update(db, notification, user_id, ticket_subject, "Staff replied to your ticket. Sign in to view and respond.")
+    return notification
 
 
 def notify_support_ticket_resolved(db: Session, company_id: uuid.UUID, user_id: uuid.UUID, ticket_subject: str, ticket_id: uuid.UUID) -> Notification:
-    return create_notification(
+    notification = create_notification(
         db, company_id, user_id, NotificationType.SUPPORT_TICKET_RESOLVED,
         f"\"{ticket_subject}\" marked resolved", link=f"/support/{ticket_id}",
     )
+    _email_support_update(db, notification, user_id, ticket_subject, "Your ticket has been marked resolved.")
+    return notification
 
 
 def mark_all_read(db: Session, company_id: uuid.UUID, user_id: uuid.UUID) -> int:

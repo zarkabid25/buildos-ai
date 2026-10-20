@@ -7,6 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.security import hash_password
 from app.models.enums import PlatformStaffRole
 from app.models.platform_admin import PlatformAdmin
@@ -20,7 +21,7 @@ from app.schemas.platform import (
     PlatformInvitationRead,
     PlatformStaffUpdate,
 )
-from app.services import platform_audit_service
+from app.services import email_service, platform_audit_service
 
 INVITE_VALID_FOR = timedelta(days=7)
 
@@ -127,6 +128,14 @@ def create_invitation(db: Session, actor: PlatformAdmin, payload: PlatformInvita
     )
     db.commit()
     db.refresh(invitation)
+    email_service.send_templated(
+        db, "account_invitation", email,
+        {
+            "org_name": "BuildOS AI (platform staff)", "inviter_name": actor.full_name, "role": payload.role.value,
+            "accept_url": f"{get_settings().app_base_url}/platform-admin/accept-invite?token={token}", "expires_at": invitation.expires_at.isoformat(),
+        },
+        dedup_key=f"platform-invitation:{invitation.id}",
+    )
     return PlatformInvitationCreated(**_invitation_read(invitation, actor.full_name).model_dump(), token=token)
 
 

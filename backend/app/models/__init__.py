@@ -83,3 +83,5 @@ from app.models.supplier_user import SupplierUser, SupplierMembership, SupplierI
 from app.models.public_site import DemoRequest, SupplierApplication, SupplierApplicationDocument  # noqa: F401
 from app.models.support import SupportTicket, SupportTicketMessage  # noqa: F401
 from app.models.platform_notification import SupplierNotification, PlatformNotification, EmailDeliveryLog  # noqa: F401
+from app.models.ai_usage import AiUsageCounter  # noqa: F401
+from app.models.password_reset import PasswordResetToken  # noqa: F401

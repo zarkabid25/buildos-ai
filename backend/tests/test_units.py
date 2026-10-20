@@ -144,6 +144,7 @@ SAFE_PRODUCTION = {
     "database_url": "postgresql://app:s3cret@db.internal:5432/buildos",
     "cors_origins": ["https://app.example.com"],
     "bcrypt_rounds": 12,
+    "trusted_hosts": ["app.example.com"],
 }
 
 
@@ -159,6 +160,7 @@ def test_safe_production_config_starts():
     ({"database_url": "postgresql://buildos:buildos@db:5432/buildos"}, "DATABASE_URL"),
     ({"cors_origins": ["http://localhost:3000"]}, "CORS_ORIGINS"),
     ({"bcrypt_rounds": 4}, "BCRYPT_ROUNDS"),
+    ({"trusted_hosts": []}, "TRUSTED_HOSTS"),
 ])
 def test_unsafe_production_config_refuses_to_start(override, message):
     from pydantic import ValidationError

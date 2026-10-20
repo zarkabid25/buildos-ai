@@ -13,7 +13,7 @@ SENT."""
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,6 +49,12 @@ class PlatformNotification(TimestampedBase):
 
 class EmailDeliveryLog(TimestampedBase):
     __tablename__ = "email_delivery_logs"
+    __table_args__ = (
+        # Phase 9.1 (Task 3): lets send_templated() detect "this exact
+        # notification was already sent" and skip resending on a retried
+        # request, without the caller needing its own dedup bookkeeping.
+        UniqueConstraint("dedup_key", name="uq_email_delivery_logs_dedup_key"),
+    )
 
     to_email: Mapped[str] = mapped_column(String(255), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -57,3 +63,5 @@ class EmailDeliveryLog(TimestampedBase):
         Enum(EmailDeliveryStatus, native_enum=False, length=20, values_callable=lambda e: [x.value for x in e]), index=True, nullable=False
     )
     error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    template_key: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    dedup_key: Mapped[str | None] = mapped_column(String(255), nullable=True)

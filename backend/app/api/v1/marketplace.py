@@ -24,7 +24,7 @@ from app.schemas.marketplace_integration import (
     QuotationAttributionRead,
     UpdateConnectionRequest,
 )
-from app.services import entitlement_service, marketplace_integration_service
+from app.services import ai_quota_service, entitlement_service, marketplace_integration_service
 
 router = APIRouter(prefix="/marketplace", tags=["marketplace"])
 
@@ -72,6 +72,7 @@ def ai_recommendation(
         f"Coverage areas: {supplier.coverage_areas}\nAlready connected: {supplier.is_connected}\nPreferred: {supplier.is_preferred}\n"
         f"Products: {[(p.name, p.category, str(p.price), p.unit, p.lead_time_days) for p in supplier.products]}"
     )
+    ai_quota_service.reserve_usage(db, current_user.company_id)
     text = generate_narration(
         llm,
         "You are an assistant for a construction company evaluating a marketplace supplier. You are advisory only -- "

@@ -5,9 +5,12 @@ from sqlalchemy.orm import Session
 
 from app.ai.llm import LLMClient, get_llm_dependency
 from app.ai.narrate import generate_narration
-from app.api.deps import SupplierSession, get_current_supplier_user, require_supplier_roles
+from fastapi.security import HTTPAuthorizationCredentials
+
+from app.api.deps import SupplierSession, bearer_scheme, get_current_supplier_user, require_supplier_roles
 from app.core.config import get_settings
 from app.core.rate_limit import limiter
+from app.core.security import decode_token
 from app.db.session import get_db
 from app.schemas.ai import AiNarrationResponse
 from app.models.enums import CommissionDisputeStatus, CommissionInvoiceStatus, SupplierMembershipRole
@@ -125,6 +128,18 @@ def accept_invite(payload: SupplierAcceptInvitation, request: Request, db: Sessi
     limiter.hit(key)
     user = supplier_invitation_service.accept_invitation(db, payload)
     return SupplierUserRead.model_validate(user)
+
+
+@router.post("/auth/logout", status_code=204)
+def logout(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme), _session: SupplierSession = Depends(get_current_supplier_user)) -> None:
+    payload = decode_token(credentials.credentials)
+    if payload:
+        supplier_auth_service.logout(payload)
+
+
+@router.post("/auth/logout-all", status_code=204)
+def logout_all(session: SupplierSession = Depends(get_current_supplier_user)) -> None:
+    supplier_auth_service.logout_all(session.user.id)
 
 
 @router.get("/auth/me", response_model=SupplierUserRead)

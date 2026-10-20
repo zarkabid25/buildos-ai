@@ -11,13 +11,19 @@ from sqlalchemy.orm import Session
 
 from app.ai.llm import LLMClient, get_llm_dependency
 from app.ai.narrate import generate_narration
-from app.api.deps import get_current_platform_admin
+from app.api.deps import require_platform_roles
 from app.db.session import get_db
+from app.models.enums import PlatformStaffRole
 from app.models.platform_admin import PlatformAdmin
 from app.schemas.ai import AiNarrationResponse
 from app.services import crm_service, marketplace_integration_service
 
 router = APIRouter(prefix="/platform/ai", tags=["platform-ai"])
+
+# Phase 9.1 (Task 4): every call here costs real provider spend, so -- same
+# as commission-agreement management and settlement elsewhere in this app --
+# it's gated to OWNER/ADMIN staff, not every authenticated staff member.
+_can_use_ai = require_platform_roles(PlatformStaffRole.OWNER, PlatformStaffRole.ADMIN)
 
 SYSTEM_PROMPT = (
     "You are an assistant for BuildOS AI's platform staff, helping them work a CRM pipeline, "
@@ -31,7 +37,7 @@ SYSTEM_PROMPT = (
 def crm_lead_insights(
     org_id: uuid.UUID,
     db: Session = Depends(get_db),
-    admin: PlatformAdmin = Depends(get_current_platform_admin),
+    admin: PlatformAdmin = Depends(_can_use_ai),
     llm: LLMClient = Depends(get_llm_dependency),
 ) -> AiNarrationResponse:
     """Lead summary + suggested follow-up actions, from this organization's
@@ -56,7 +62,7 @@ def crm_lead_insights(
 @router.get("/revenue-summary", response_model=AiNarrationResponse)
 def revenue_trend_summary(
     db: Session = Depends(get_db),
-    admin: PlatformAdmin = Depends(get_current_platform_admin),
+    admin: PlatformAdmin = Depends(_can_use_ai),
     llm: LLMClient = Depends(get_llm_dependency),
 ) -> AiNarrationResponse:
     """Reuses the real, already-computed SaaS billing and marketplace
@@ -94,7 +100,7 @@ def supplier_match_explanation(
     material_id: uuid.UUID,
     area: str | None = None,
     db: Session = Depends(get_db),
-    admin: PlatformAdmin = Depends(get_current_platform_admin),
+    admin: PlatformAdmin = Depends(_can_use_ai),
     llm: LLMClient = Depends(get_llm_dependency),
 ) -> AiNarrationResponse:
     """Explains the real, already-computed deterministic matches (PLAT-027)

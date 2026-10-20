@@ -177,6 +177,9 @@ class EntitlementRead(BaseModel):
     marketplace_included: bool
     current_projects: int
     current_team_members: int
+    # Phase 9.1 (Task 4): real usage against ai_monthly_messages for the
+    # current calendar month, so a company can see this before hitting 429.
+    current_ai_messages: int
     billing_status: SubscriptionStatus | None
     current_period_end: datetime | None
     grace_period_ends_at: datetime | None

@@ -21,7 +21,7 @@ from app.schemas.ai import (
     ChatResponse,
     InsightsReport,
 )
-from app.services import ai_chat_service, ai_proposal_service
+from app.services import ai_chat_service, ai_proposal_service, ai_quota_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -44,7 +44,7 @@ def ai_status(current_user: User = Depends(get_current_user)) -> AiStatus:
     settings = get_settings()
     # Deliberately no key (not even a masked one): it's a server env var, never shown in the app.
     return AiStatus(
-        configured=bool(settings.llm_api_key),
+        configured=bool(settings.llm_api_key.get_secret_value()),
         provider="anthropic",
         model=settings.llm_model,
         use_fallbacks=settings.llm_use_fallbacks,
@@ -64,6 +64,11 @@ def chat(
     db: Session = Depends(get_db),
     llm: LLMClient = Depends(get_llm),
 ) -> ChatResponse:
+    # Phase 9.1 (Task 4): ai_monthly_messages was previously just a displayed
+    # figure (see docs/RELEASE_READINESS.md). This is the one place the chat
+    # copilot actually gates on it, atomically, before spending on a real
+    # provider call.
+    ai_quota_service.reserve_usage(db, current_user.company_id)
     try:
         return ai_chat_service.chat(db, current_user, payload, llm)
     except anthropic.AuthenticationError:

@@ -15,6 +15,9 @@ from app.core.security import (
     create_supplier_access_token,
     create_supplier_refresh_token,
     decode_token,
+    logout_all_sessions,
+    revoke_token,
+    rotate_refresh_or_reject,
     verify_password,
 )
 from app.models.enums import MarketplaceSupplierStatus, SupplierMembershipStatus
@@ -75,6 +78,11 @@ def select_supplier(db: Session, refresh_token: str, marketplace_supplier_id: uu
     payload = decode_token(refresh_token)
     if not payload or payload.get("type") != "supplier_refresh":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
+    # Deliberately NOT rotated here (unlike refresh() below): this is a
+    # scoping step on an already-valid session -- a multi-supplier user is
+    # expected to call this more than once from the same login (switching
+    # which supplier they're acting as), so the original refresh token must
+    # stay usable for that, not be single-use.
     try:
         user_id = uuid.UUID(payload["sub"])
     except (KeyError, ValueError, TypeError):
@@ -95,6 +103,7 @@ def refresh(db: Session, refresh_token: str) -> SupplierTokenPair:
     payload = decode_token(refresh_token)
     if not payload or payload.get("type") != "supplier_refresh":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
+    rotate_refresh_or_reject(payload, "supplier_refresh")
     try:
         user_id = uuid.UUID(payload["sub"])
     except (KeyError, ValueError, TypeError):
@@ -111,3 +120,11 @@ def refresh(db: Session, refresh_token: str) -> SupplierTokenPair:
 
 def my_memberships(db: Session, supplier_user_id: uuid.UUID) -> list[SupplierMembershipSummary]:
     return _summaries(_active_memberships(db, supplier_user_id))
+
+
+def logout(access_token_payload: dict) -> None:
+    revoke_token(access_token_payload)
+
+
+def logout_all(supplier_user_id: uuid.UUID) -> None:
+    logout_all_sessions("supplier_access", str(supplier_user_id))

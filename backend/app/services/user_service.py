@@ -8,7 +8,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.updates import apply_changes
-from app.core.security import hash_password, verify_password
+from app.core.config import get_settings
+from app.core.security import hash_password, logout_all_sessions, verify_password
 from app.models.enums import UserRole
 from app.models.company import Company
 from app.models.invitation import Invitation
@@ -23,7 +24,7 @@ from app.schemas.user import (
     UserAdminUpdate,
     UserSelfUpdate,
 )
-from app.services import audit_service, entitlement_service
+from app.services import audit_service, email_service, entitlement_service
 
 
 def update_me(db: Session, user: User, payload: UserSelfUpdate) -> User:
@@ -38,6 +39,10 @@ def change_password(db: Session, user: User, payload: PasswordChange) -> None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Current password is incorrect")
     user.hashed_password = hash_password(payload.new_password)
     db.commit()
+    # Phase 9.1: every existing session must stop working the instant a
+    # password changes, including the one that just made the request (it
+    # will mint itself a fresh token pair anyway on its next call).
+    logout_all_sessions("access", str(user.id))
 
 
 def list_users(db: Session, company_id: uuid.UUID) -> list[User]:
@@ -73,6 +78,12 @@ def update_user(db: Session, actor: User, user_id: uuid.UUID, payload: UserAdmin
             db, actor.company_id, actor.id, action, "user", user.id,
             f"{user.full_name} {'reactivated' if user.is_active else 'deactivated'}",
         )
+        if not user.is_active:
+            # Belt-and-suspenders: get_current_user already re-checks
+            # is_active on every request, but this also kills any
+            # already-issued access token immediately rather than waiting
+            # for its natural (up to 60 minute) expiry.
+            logout_all_sessions("access", str(user.id))
     db.commit()
     db.refresh(user)
     return user
@@ -145,6 +156,16 @@ def create_invitation(db: Session, actor: User, payload: InvitationCreate) -> In
     )
     db.commit()
     db.refresh(invitation)
+    # Phase 9.1 (Task 3): dedup_key is the invitation's own id, so retrying
+    # this request (e.g. a client timeout + resend) never double-emails.
+    email_service.send_templated(
+        db, "account_invitation", email,
+        {
+            "org_name": actor.company.name, "inviter_name": actor.full_name, "role": payload.role.value,
+            "accept_url": f"{get_settings().app_base_url}/accept-invite?token={token}", "expires_at": invitation.expires_at.isoformat(),
+        },
+        dedup_key=f"invitation:{invitation.id}",
+    )
     return InvitationCreated(**_invitation_read(invitation, actor.full_name).model_dump(), token=token)
 
 

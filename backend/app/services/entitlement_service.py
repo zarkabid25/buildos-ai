@@ -32,6 +32,12 @@ def get_effective_entitlements(db: Session, company_id: uuid.UUID) -> Entitlemen
     )
     current_projects = db.query(Project).filter(Project.company_id == company_id).count()
     current_team_members = db.query(User).filter(User.company_id == company_id).count()
+    # Local import: ai_quota_service imports this module to look up the plan
+    # limit it enforces, so importing it back at module level would be a
+    # circular import; deferring it to call time breaks the cycle.
+    from app.services import ai_quota_service
+
+    current_ai_messages = ai_quota_service.current_usage(db, company_id)
 
     if sub:
         plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == sub.plan_id).first()
@@ -45,6 +51,7 @@ def get_effective_entitlements(db: Session, company_id: uuid.UUID) -> Entitlemen
             marketplace_included=plan.marketplace_included,
             current_projects=current_projects,
             current_team_members=current_team_members,
+            current_ai_messages=current_ai_messages,
             billing_status=sub.status,
             current_period_end=sub.current_period_end,
             grace_period_ends_at=sub.grace_period_ends_at,
@@ -57,6 +64,7 @@ def get_effective_entitlements(db: Session, company_id: uuid.UUID) -> Entitlemen
         return EntitlementRead(
             source="legacy", plan_name=None, max_projects=None, max_team_members=None, ai_monthly_messages=None,
             storage_gb=None, marketplace_included=True, current_projects=current_projects, current_team_members=current_team_members,
+            current_ai_messages=current_ai_messages,
             billing_status=None, current_period_end=None, grace_period_ends_at=None,
         )
 
@@ -72,6 +80,7 @@ def get_effective_entitlements(db: Session, company_id: uuid.UUID) -> Entitlemen
     return EntitlementRead(
         source="none", plan_name=None, max_projects=None, max_team_members=None, ai_monthly_messages=None, storage_gb=None,
         marketplace_included=False, current_projects=current_projects, current_team_members=current_team_members,
+        current_ai_messages=current_ai_messages,
         billing_status=None, current_period_end=None, grace_period_ends_at=None,
     )
 

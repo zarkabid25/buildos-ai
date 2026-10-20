@@ -8,6 +8,9 @@ from app.core.security import (
     create_platform_access_token,
     create_platform_refresh_token,
     decode_token,
+    logout_all_sessions,
+    revoke_token,
+    rotate_refresh_or_reject,
     verify_password,
 )
 from app.models.platform_admin import PlatformAdmin
@@ -29,6 +32,7 @@ def refresh(db: Session, refresh_token: str) -> TokenPair:
     payload = decode_token(refresh_token)
     if not payload or payload.get("type") != "platform_refresh":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token")
+    rotate_refresh_or_reject(payload, "platform_refresh")
 
     try:
         admin_id = uuid.UUID(payload["sub"])
@@ -47,3 +51,11 @@ def issue_tokens(admin: PlatformAdmin) -> TokenPair:
         access_token=create_platform_access_token(str(admin.id)),
         refresh_token=create_platform_refresh_token(str(admin.id)),
     )
+
+
+def logout(access_token_payload: dict) -> None:
+    revoke_token(access_token_payload)
+
+
+def logout_all(admin_id: uuid.UUID) -> None:
+    logout_all_sessions("platform_access", str(admin_id))
