@@ -38,6 +38,15 @@ class Settings(BaseSettings):
     # Phase 8 public forms -- same mechanism, new keys (app/core/rate_limit.py).
     public_form_max_per_ip: int = 10
     public_form_window_seconds: int = 60 * 60
+    # Phase 9 security audit (PLAT-049): refresh was the one auth-adjacent
+    # endpoint on all three token systems with no rate limiting at all.
+    refresh_max_per_ip: int = 30
+    refresh_window_seconds: int = 60 * 60
+    # Phase 9 AI narration features (PLAT-048): a per-actor usage cap, since
+    # ai_monthly_messages on a billing plan is currently just a displayed
+    # figure with nothing enforcing it (a known gap -- see RELEASE_READINESS.md).
+    ai_narration_max_per_actor: int = 30
+    ai_narration_window_seconds: int = 60 * 60
 
     llm_api_key: str = ""
     llm_model: str = "claude-opus-5"

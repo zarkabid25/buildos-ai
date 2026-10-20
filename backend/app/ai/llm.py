@@ -45,6 +45,19 @@ class AnthropicLLMClient:
         return self._client.messages.create(**params)
 
 
+def get_llm_dependency() -> LLMClient:
+    """FastAPI dependency wrapper shared by every AI-feature router (the
+    chat copilot in api/v1/ai.py, and the Phase 9 single-shot narration
+    endpoints across all three portals) -- one place turns "no API key
+    configured" into a clean 503 instead of each router re-implementing it."""
+    from fastapi import HTTPException
+
+    try:
+        return get_llm_client()
+    except AINotConfigured:
+        raise HTTPException(503, "The AI assistant isn't configured yet. An administrator needs to set LLM_API_KEY on the server.")
+
+
 def get_llm_client() -> LLMClient:
     settings = get_settings()
     if not settings.llm_api_key:

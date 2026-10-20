@@ -6,13 +6,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
+import { AiNarrationPanel } from "@/components/ai-narration-panel";
 import { useFeedback } from "@/components/feedback";
 import { PlatformShell } from "@/components/platform-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ErrorState } from "@/components/ui/states";
-import { ApiError } from "@/lib/platform-api";
+import { ApiError, platformApi } from "@/lib/platform-api";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
 import { useAddCrmActivity, useAddCrmContact, useConvertCrmOrganization, useCrmOrganization } from "@/lib/use-crm";
 
@@ -32,7 +33,7 @@ const activitySchema = z.object({
 type ActivityInput = z.infer<typeof activitySchema>;
 
 export default function CrmOrganizationDetailPage() {
-  const { admin, isLoading } = usePlatformAuth();
+  const { admin, accessToken, isLoading } = usePlatformAuth();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const { toast, confirm } = useFeedback();
@@ -145,6 +146,12 @@ export default function CrmOrganizationDetailPage() {
                   </span>
                 )}
               </div>
+
+              <AiNarrationPanel
+                label="Ask AI for a lead summary and next steps"
+                theme="dark"
+                onGenerate={() => platformApi.post<{ narration: string }>(`/platform/ai/crm-organizations/${org.id}/insights`, {}, accessToken ?? undefined)}
+              />
 
               {convertMode === "create" && (
                 <div className="mt-4 flex items-end gap-2 border-t border-[var(--bo-divider)] pt-4">

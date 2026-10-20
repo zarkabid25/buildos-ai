@@ -356,7 +356,7 @@ def test_commission_statement_isolation(client, auth_a):
     assert res.status_code == 201
 
     po_id = _awarded_po(client, auth_a, staff, mkt_supplier)
-    client.post("/api/v1/payments/supplier", json={"purchase_order_id": po_id, "amount": "10000", "paid_on": "2026-10-19", "method": "bank_transfer"}, headers=auth_a)
+    client.post("/api/v1/payments/supplier", json={"purchase_order_id": po_id, "amount": "10000", "paid_on": str(__import__("datetime").date.today()), "method": "bank_transfer"}, headers=auth_a)
 
     res = client.get("/api/v1/supplier-portal/commissions/ledger", headers=headers)
     assert len(res.json()) == 1
@@ -414,7 +414,7 @@ def test_existing_erp_regression_untouched_by_supplier_portal(client, auth_a):
     supplier = make(client, auth_a, "/suppliers", {"name": "Plain ERP Supplier"})
     po = make(client, auth_a, "/purchase-orders", {"supplier_id": supplier["id"], "project_id": project["id"], "items": [{"material_id": material["id"], "quantity": "1", "rate": "100"}]})
     client.post(f"/api/v1/purchase-orders/{po['id']}/approve", headers=auth_a)
-    client.post("/api/v1/payments/supplier", json={"purchase_order_id": po["id"], "amount": "100", "paid_on": "2026-10-19", "method": "bank_transfer"}, headers=auth_a)
+    client.post("/api/v1/payments/supplier", json={"purchase_order_id": po["id"], "amount": "100", "paid_on": str(__import__("datetime").date.today()), "method": "bank_transfer"}, headers=auth_a)
 
     res = client.get("/api/v1/supplier-portal/orders", headers=headers)
     assert all(o["purchase_order_id"] != po["id"] for o in res.json())

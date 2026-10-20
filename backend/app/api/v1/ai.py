@@ -5,9 +5,8 @@ import anthropic
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.ai.errors import AINotConfigured
 from app.ai.insights import build_insights
-from app.ai.llm import LLMClient, get_llm_client
+from app.ai.llm import LLMClient, get_llm_dependency
 from app.api.deps import get_current_user, require_roles
 from app.core.config import get_settings
 from app.db.session import get_db
@@ -37,14 +36,7 @@ CAN_DECIDE = (
 )
 
 
-def get_llm() -> LLMClient:
-    try:
-        return get_llm_client()
-    except AINotConfigured:
-        raise HTTPException(
-            503,
-            "The AI assistant isn't configured yet. An administrator needs to set LLM_API_KEY on the server.",
-        )
+get_llm = get_llm_dependency
 
 
 @router.get("/status", response_model=AiStatus)

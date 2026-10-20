@@ -83,3 +83,11 @@ class AiConversationRead(BaseModel):
 
 class AiConversationDetail(AiConversationRead):
     messages: list[AiMessageRead]
+
+
+class AiNarrationResponse(BaseModel):
+    """Phase 9 (PLAT-048): the shared response shape for every single-shot
+    AI narration endpoint across all three portals -- plain advisory text,
+    never structured data a caller might mistake for verified records."""
+
+    narration: str

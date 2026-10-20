@@ -3,17 +3,18 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+import { AiNarrationPanel } from "@/components/ai-narration-panel";
 import { AppShell } from "@/components/app-shell";
 import { useFeedback } from "@/components/feedback";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ErrorState, Skeleton } from "@/components/ui/states";
-import { ApiError } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useConnectSupplier, useDiscoverSupplierDetail } from "@/lib/use-marketplace-discovery";
 
 export default function MarketplaceSupplierPage() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, accessToken } = useAuth();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const { toast } = useFeedback();
@@ -66,6 +67,11 @@ export default function MarketplaceSupplierPage() {
                 <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">Connected</span>
               )}
             </div>
+
+            <AiNarrationPanel
+              label="Ask AI why this supplier might be a good fit"
+              onGenerate={() => api.get<{ narration: string }>(`/marketplace/suppliers/${supplier.id}/ai/recommendation`, accessToken ?? undefined)}
+            />
 
             <Card>
               <h2 className="font-medium text-ink">Delivery coverage</h2>

@@ -5,11 +5,14 @@ from sqlalchemy.orm import Session
 
 from pydantic import BaseModel
 
+from app.ai.llm import LLMClient, get_llm_dependency
+from app.ai.narrate import generate_narration
 from app.api.deps import get_current_user, require_roles
 from app.api.v1.procurement import CAN_REQUEST
 from app.db.session import get_db
 from app.models.company import Company
 from app.models.user import User
+from app.schemas.ai import AiNarrationResponse
 from app.schemas.marketplace_integration import (
     CompanySupplierConnectionRead,
     ConnectSupplierRequest,
@@ -53,6 +56,30 @@ def get_supplier_detail(
     supplier_id: uuid.UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> DiscoverySupplierDetail:
     return marketplace_integration_service.get_supplier_detail(db, current_user.company_id, supplier_id)
+
+
+@router.get("/suppliers/{supplier_id}/ai/recommendation", response_model=AiNarrationResponse)
+def ai_recommendation(
+    supplier_id: uuid.UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db), llm: LLMClient = Depends(get_llm_dependency),
+) -> AiNarrationResponse:
+    """Explains why this specific, real supplier profile might fit the
+    company's needs (PLAT-048) -- never invents a price, since none of this
+    supplier's real product prices are included unless they're already on
+    its real catalog below."""
+    supplier = marketplace_integration_service.get_supplier_detail(db, current_user.company_id, supplier_id)
+    data = (
+        f"Supplier: {supplier.name}\nVerification: {supplier.verification_status.value}\nCategories: {supplier.categories}\n"
+        f"Coverage areas: {supplier.coverage_areas}\nAlready connected: {supplier.is_connected}\nPreferred: {supplier.is_preferred}\n"
+        f"Products: {[(p.name, p.category, str(p.price), p.unit, p.lead_time_days) for p in supplier.products]}"
+    )
+    text = generate_narration(
+        llm,
+        "You are an assistant for a construction company evaluating a marketplace supplier. You are advisory only -- "
+        "you never create a connection, an RFQ invitation, or a purchase order; a human does that separately.",
+        f"Based only on the real supplier profile below, explain what this supplier might be a good fit for and anything worth double-checking:\n\n{data}",
+        actor_key=f"user:{current_user.id}", feature="supplier_recommendation",
+    )
+    return AiNarrationResponse(narration=text)
 
 
 @router.post("/suppliers/{supplier_id}/connect", response_model=CompanySupplierConnectionRead, status_code=201)

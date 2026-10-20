@@ -65,7 +65,9 @@ def ordinary_po(client, auth):
 
 
 def pay(client, auth, po_id, amount, method="bank_transfer"):
-    res = client.post("/api/v1/payments/supplier", json={"purchase_order_id": po_id, "amount": amount, "paid_on": "2026-10-19", "method": method}, headers=auth)
+    from datetime import date
+
+    res = client.post("/api/v1/payments/supplier", json={"purchase_order_id": po_id, "amount": amount, "paid_on": str(date.today()), "method": method}, headers=auth)
     assert res.status_code == 201, res.text
     return res.json()
 

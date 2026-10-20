@@ -69,7 +69,13 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 
 
 @router.post("/refresh", response_model=TokenPair)
-def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> TokenPair:
+def refresh(payload: RefreshRequest, request: Request, db: Session = Depends(get_db)) -> TokenPair:
+    # Phase 9 security audit (PLAT-049): previously unlimited -- a stolen or
+    # guessed refresh token had no throttle on repeated use.
+    settings = get_settings()
+    key = f"refresh:{_client_ip(request)}"
+    limiter.check(key, settings.refresh_max_per_ip, settings.refresh_window_seconds, TOO_MANY)
+    limiter.hit(key)
     return auth_service.refresh(db, payload.refresh_token)
 
 

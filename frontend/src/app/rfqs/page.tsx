@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { AiNarrationPanel } from "@/components/ai-narration-panel";
 import { AppShell } from "@/components/app-shell";
 import { useFeedback } from "@/components/feedback";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -267,11 +269,16 @@ function CreateRfq({ onCreated }: { onCreated: (id: string) => void }) {
 
 function RfqDetail({ rfqId, role }: { rfqId: string; role: UserRole }) {
   const query = useRfq(rfqId);
+  const { accessToken } = useAuth();
   return (
     <QueryView query={query}>
       {(rfq) => (
         <div className="space-y-4">
           <RfqHeader rfq={rfq} canDecide={CAN_APPROVE.includes(role)} />
+          <AiNarrationPanel
+            label="Ask AI to summarize this RFQ and compare quotations"
+            onGenerate={() => api.get<{ narration: string }>(`/rfqs/${rfqId}/ai/summary`, accessToken ?? undefined)}
+          />
           {rfq.status === "open" && CAN_REQUEST.includes(role) && <MarketplacePanel rfq={rfq} />}
           <Comparison rfq={rfq} canDecide={CAN_APPROVE.includes(role)} />
           {rfq.status === "open" && CAN_REQUEST.includes(role) && <QuoteForm rfq={rfq} />}

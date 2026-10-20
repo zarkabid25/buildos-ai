@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+import { AiNarrationPanel } from "@/components/ai-narration-panel";
 import { useFeedback } from "@/components/feedback";
 import { SupplierShell } from "@/components/supplier-shell";
 import { Button } from "@/components/ui/button";
@@ -10,12 +11,12 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ErrorState, Skeleton } from "@/components/ui/states";
-import { ApiError } from "@/lib/supplier-api";
+import { ApiError, supplierApi } from "@/lib/supplier-api";
 import { useSupplierAuth } from "@/lib/supplier-auth-context";
 import { useDeclineRfqInvitation, useSubmitSupplierQuotation, useSupplierRfqDetail } from "@/lib/use-supplier-portal";
 
 export default function SupplierRfqDetailPage() {
-  const { refreshToken, activeSupplierId, isLoading: authLoading } = useSupplierAuth();
+  const { refreshToken, activeSupplierId, accessToken, isLoading: authLoading } = useSupplierAuth();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const { toast, confirm } = useFeedback();
@@ -91,6 +92,11 @@ export default function SupplierRfqDetailPage() {
               {rfq.response_due && <p className="text-sm text-gray-500">Response due {rfq.response_due}</p>}
               {rfq.notes && <p className="text-sm text-gray-600">{rfq.notes}</p>}
             </Card>
+
+            <AiNarrationPanel
+              label="Ask AI to summarize this RFQ"
+              onGenerate={() => supplierApi.get<{ narration: string }>(`/supplier-portal/rfqs/${params.id}/ai/summary`, accessToken ?? undefined)}
+            />
 
             <Card className="space-y-3">
               <h2 className="text-sm font-semibold text-gray-900">Materials requested</h2>

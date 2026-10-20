@@ -4,15 +4,17 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, DollarSign, FileWarning, TrendingUp } from "lucide-react";
 
+import { AiNarrationPanel } from "@/components/ai-narration-panel";
 import { CommissionsSubNav } from "@/components/platform/commissions-subnav";
 import { MetricCard } from "@/components/platform/metric-card";
 import { PlatformShell } from "@/components/platform-shell";
 import { ErrorState, Skeleton } from "@/components/ui/states";
+import { platformApi } from "@/lib/platform-api";
 import { usePlatformAuth } from "@/lib/platform-auth-context";
 import { useCommissionRevenueDashboard } from "@/lib/use-commissions";
 
 export default function PlatformCommissionRevenuePage() {
-  const { admin, isLoading } = usePlatformAuth();
+  const { admin, accessToken, isLoading } = usePlatformAuth();
   const router = useRouter();
   const { data, isLoading: revenueLoading, isError, error, refetch } = useCommissionRevenueDashboard();
 
@@ -33,6 +35,12 @@ export default function PlatformCommissionRevenuePage() {
           <h1 className="text-2xl font-semibold tracking-[-0.025em] text-[var(--bo-text)]">Commission Revenue</h1>
           <p className="mt-1 text-sm text-[var(--bo-text-secondary)]">Earned, invoiced, collected and outstanding -- kept distinct. The marketplace order value itself is never counted as BuildOS revenue.</p>
         </div>
+
+        <AiNarrationPanel
+          label="Ask AI to summarize revenue trends"
+          theme="dark"
+          onGenerate={() => platformApi.get<{ narration: string }>("/platform/ai/revenue-summary", accessToken ?? undefined)}
+        />
 
         {isError && <ErrorState error={error} onRetry={() => refetch()} />}
         {revenueLoading && (

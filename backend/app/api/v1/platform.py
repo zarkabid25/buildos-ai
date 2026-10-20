@@ -54,7 +54,11 @@ def login(payload: PlatformLoginRequest, request: Request, db: Session = Depends
 
 
 @router.post("/auth/refresh", response_model=TokenPair)
-def refresh(payload: PlatformRefreshRequest, db: Session = Depends(get_db)) -> TokenPair:
+def refresh(payload: PlatformRefreshRequest, request: Request, db: Session = Depends(get_db)) -> TokenPair:
+    settings = get_settings()
+    key = f"platform-refresh:{_client_ip(request)}"
+    limiter.check(key, settings.refresh_max_per_ip, settings.refresh_window_seconds, TOO_MANY)
+    limiter.hit(key)
     return platform_auth_service.refresh(db, payload.refresh_token)
 
 
